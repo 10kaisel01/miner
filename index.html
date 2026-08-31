@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MINA 3D — Simulador de Minería</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div id="coinsPanel" class="panel">
+    <span class="icon">💰</span>
+    <span class="val mono" id="coinsVal">$0</span>
+    <span class="mult mono" id="multVal">x1</span>
+  </div>
+  <div id="onlineBadge" class="panel">👥 <span id="onlineCount">1</span></div>
+  <div id="stageBadge" class="panel">🗺️ <span id="stageName">Mina Inicial</span></div>
+
+  <div id="rebirthBar" class="panel">
+    <div class="label">RENACER · <span id="rebirthCount">0</span> veces</div>
+    <div id="rebirthTrack"><div id="rebirthFill"></div></div>
+    <button id="rebirthBtn">Renacer</button>
+  </div>
+
+  <div id="invPanel" class="panel">
+    <h3>MOCHILA <span class="mono" id="invText">0/40</span></h3>
+    <div id="invBarWrap"><div id="invBarInner"></div></div>
+    <div id="invList"></div>
+    <div id="gearLine">⛏️ <b id="pickaxeName">Pico de Madera</b><br>🎒 <b id="backpackName">Saco Básico</b></div>
+  </div>
+
+  <div id="targetInfo" class="panel">
+    <div id="targetName">—</div>
+    <div id="targetHealthWrap"><div id="targetHealthInner"></div></div>
+  </div>
+
+  <div id="crosshair"></div>
+
+  <div id="promptSell" class="prompt panel"><kbd>E</kbd>Vender minerales</div>
+  <div id="promptShop" class="prompt panel"><kbd>E</kbd>Abrir tienda</div>
+  <div id="promptPortal" class="prompt panel"><kbd>E</kbd>Ver etapas y ranking</div>
+  <div id="promptEgg" class="prompt panel"><kbd>E</kbd>Huevos y mascotas</div>
+
+  <div id="toastContainer"></div>
+
+  <div id="controlsHint">
+    <span><kbd>WASD</kbd>Moverse</span>
+    <span><kbd>Mouse</kbd>Mirar alrededor</span>
+    <span><kbd>Click izq.</kbd>Minar</span>
+    <span><kbd>Espacio</kbd>Saltar</span>
+    <span><kbd>Shift</kbd>Correr</span>
+  </div>
+</div>
+
+<!-- start screen -->
+<div id="startScreen" class="overlay">
+  <div class="box panel">
+    <h1>⛏️ MINA 3D</h1>
+    <div class="sub">Simulador de Minería</div>
+    <ul>
+      <li><kbd>WASD</kbd> para moverte por la mina</li>
+      <li>Mueve el <kbd>Mouse</kbd> para mirar alrededor</li>
+      <li><kbd>Click izquierdo</kbd> (mantener) para minar el bloque frente a ti</li>
+      <li>Cava profundo para encontrar minerales más valiosos</li>
+      <li>Ve a la <b style="color:var(--emerald)">Zona de Venta</b> y presiona <kbd>E</kbd> para vender</li>
+      <li>Ve a la <b style="color:var(--cyan)">Tienda</b> y presiona <kbd>E</kbd> para mejorar tu pico y mochila</li>
+      <li>Ve al <b style="color:var(--amber)">Portal</b> para viajar entre etapas y ver el ranking</li>
+      <li>Ve a los <b style="color:var(--pink)">Huevos</b> para conseguir mascotas (equipá hasta 3)</li>
+      <li>Junta suficientes monedas y <b style="color:var(--pink)">Renace</b> para un multiplicador permanente</li>
+    </ul>
+    <div class="nameField">
+      <label for="nameInput">Tu nombre de minero</label>
+      <input id="nameInput" type="text" maxlength="16" spellcheck="false">
+    </div>
+    <button class="bigbtn" id="playBtn">JUGAR</button>
+    <div class="footnote">Mejor experiencia en computadora, con teclado y mouse.<br>
+    Multijugador: acá en claude.ai usa sync compartido (con saltos). Si lo hosteás con tu propio Firebase, es en vivo y fluido.<br>
+    De cualquier forma, tu nombre, posición y monedas quedan visibles para cualquiera que se conecte al mismo lugar.</div>
+  </div>
+</div>
+
+<!-- shop modal -->
+<div id="shopModal" class="overlay hidden">
+  <div class="modalBox panel">
+    <div class="modalHead">
+      <h2>🛒 Tienda</h2>
+      <div class="coins" id="shopCoins">$0</div>
+      <button class="closeX" id="shopClose">✕</button>
+    </div>
+    <div class="modalBody">
+      <div class="shopCol">
+        <h3>Picos</h3>
+        <div id="pickaxeList"></div>
+      </div>
+      <div class="shopCol">
+        <h3>Mochilas</h3>
+        <div id="backpackList"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- rebirth modal -->
+<div id="rebirthModal" class="overlay hidden">
+  <div class="box panel">
+    <h2>✨ ¿Renacer?</h2>
+    <p>Perderás todas tus monedas, tu pico y tu mochila actuales.<br>
+    A cambio obtendrás un <b style="color:var(--gold)">multiplicador de ganancias permanente</b> y la mina se regenerará por completo.</p>
+    <div class="actions">
+      <button class="btn-ghost" id="rebirthCancel">Cancelar</button>
+      <button class="btn-confirm" id="rebirthConfirm">Renacer ahora</button>
+    </div>
+  </div>
+</div>
+
+<!-- stages / portal modal -->
+<div id="stagesModal" class="overlay hidden">
+  <div class="modalBox panel">
+    <div class="modalHead">
+      <h2>🗺️ Portal de Etapas</h2>
+      <button class="closeX" id="stagesClose">✕</button>
+    </div>
+    <div class="modalBody" style="grid-template-columns:1fr 1fr;">
+      <div class="shopCol">
+        <h3>Etapas</h3>
+        <div id="stageList"></div>
+      </div>
+      <div class="shopCol">
+        <h3>Ranking compartido</h3>
+        <div id="rankList"></div>
+        <div class="footnote" style="margin-top:10px;">Se actualiza cada pocos segundos con otros jugadores conectados a este mismo enlace.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- eggs / pets modal -->
+<div id="petsModal" class="overlay hidden">
+  <div class="modalBox panel">
+    <div class="modalHead">
+      <h2>🥚 Huevos y Mascotas</h2>
+      <div class="coins" id="petsCoins">$0</div>
+      <button class="closeX" id="petsClose">✕</button>
+    </div>
+    <div class="modalBody" style="grid-template-columns:1fr 1fr;">
+      <div class="shopCol">
+        <h3>Huevos</h3>
+        <div id="eggList"></div>
+      </div>
+      <div class="shopCol">
+        <h3>Tus mascotas <span class="mono" id="petSlotCount" style="color:var(--text-dim);font-size:11px;">(0/3 equipadas)</span></h3>
+        <div id="petList"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- Firebase: solo se activa si estás hosteando este juego afuera de claude.ai
+     con tu propio proyecto (ver firebase-config.js). Si no carga o no hay
+     configuración real, el juego cae automáticamente al modo de respaldo. -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js" onerror="console.warn('[MINA3D] Firebase SDK no disponible en este entorno, uso modo de respaldo.')"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js" onerror="console.warn('[MINA3D] Firebase SDK (database) no disponible, uso modo de respaldo.')"></script>
+<script src="firebase-config.js" onerror="console.warn('[MINA3D] firebase-config.js no encontrado, uso modo de respaldo.')"></script>
+<script src="game.js"></script>
+</body>
+</html>
