@@ -1175,6 +1175,7 @@ function togglePetEquip(uid){
     state.equippedPets.push(uid);
   }
   markDirty();
+  rebuildMyPetFollowers();
   updateHUD();
   renderPets();
 }
@@ -1328,30 +1329,110 @@ function hashColor(str){
   return new THREE.Color().setHSL(hue/360, 0.55, 0.55).getHex();
 }
 
-const otherPlayersData = new Map();   // id -> {name,x,y,z,stage,coins,rebirths,ts}
-const otherPlayerAvatars = new Map(); // id -> {group, target:Vector3}
+// "skin" del minero: cada jugador se ve como este personaje low-poly ante los
+// demás (uno mismo no se ve el cuerpo, es primera persona — esto es lo que
+// ven TUS amigos cuando te miran). El color de traje/casco sale del nombre.
+function buildMinerSkin(suitColor){
+  const group = new THREE.Group();
+  const suitMat = new THREE.MeshStandardMaterial({color:suitColor, roughness:0.7});
+  const skinMat = new THREE.MeshStandardMaterial({color:0xd9a066, roughness:0.85});
+  const helmetMat = new THREE.MeshStandardMaterial({color:suitColor, roughness:0.35, metalness:0.4, emissive:suitColor, emissiveIntensity:0.15});
+  const lampMat = new THREE.MeshStandardMaterial({color:0xfff2c0, emissive:0xfff2c0, emissiveIntensity:0.9});
+
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.62,0.3), suitMat);
+  torso.position.y = 0.95;
+  group.add(torso);
+
+  const legGeo = new THREE.BoxGeometry(0.18,0.55,0.2);
+  const legMat = new THREE.MeshStandardMaterial({color:0x2a2420, roughness:0.8});
+  const legL = new THREE.Mesh(legGeo, legMat); legL.position.set(-0.14,0.28,0); group.add(legL);
+  const legR = new THREE.Mesh(legGeo, legMat); legR.position.set(0.14,0.28,0); group.add(legR);
+
+  const armGeo = new THREE.BoxGeometry(0.15,0.5,0.15);
+  const armL = new THREE.Mesh(armGeo, suitMat); armL.position.set(-0.35,0.95,0); group.add(armL);
+  const armR = new THREE.Mesh(armGeo, suitMat); armR.position.set(0.35,0.95,0); group.add(armR);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.22,10,10), skinMat);
+  head.position.y = 1.5;
+  group.add(head);
+
+  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.245,10,10,0,Math.PI*2,0,Math.PI*0.6), helmetMat);
+  helmet.position.y = 1.56;
+  group.add(helmet);
+
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.05,8,8), lampMat);
+  lamp.position.set(0,1.56,0.24);
+  group.add(lamp);
+
+  return group;
+}
+
+// mascota compañera: criatura chica y estilizada, coloreada según su rareza
+function buildPetFollowerMesh(rarity){
+  const info = PET_RARITIES[rarity] || PET_RARITIES.common;
+  const group = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({
+    color:info.color, roughness:0.4, metalness:0.2,
+    emissive:info.color, emissiveIntensity:0.35,
+  });
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.16,10,10), mat);
+  group.add(body);
+  const earL = new THREE.Mesh(new THREE.ConeGeometry(0.06,0.14,6), mat);
+  earL.position.set(-0.09,0.16,0); earL.rotation.z = 0.3;
+  group.add(earL);
+  const earR = new THREE.Mesh(new THREE.ConeGeometry(0.06,0.14,6), mat);
+  earR.position.set(0.09,0.16,0); earR.rotation.z = -0.3;
+  group.add(earR);
+  const eyeGeo = new THREE.SphereGeometry(0.025,6,6);
+  const eyeMat = new THREE.MeshBasicMaterial({color:0x0c0a10});
+  const eyeL = new THREE.Mesh(eyeGeo, eyeMat); eyeL.position.set(-0.06,0.02,0.14); group.add(eyeL);
+  const eyeR = new THREE.Mesh(eyeGeo, eyeMat); eyeR.position.set(0.06,0.02,0.14); group.add(eyeR);
+  return group;
+}
+
+const PET_LATERAL_BY_COUNT = { 1:[0], 2:[-0.4,0.4], 3:[-0.5,0,0.5] };
+const PET_FOLLOW_DIST = 1.1;
+function petFollowerOffset(index, count, yaw){
+  const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+  const rx = Math.cos(yaw),  rz = -Math.sin(yaw);
+  const bx = -fx, bz = -fz;
+  const lateral = (PET_LATERAL_BY_COUNT[count] || [0])[index] || 0;
+  return { x: bx*PET_FOLLOW_DIST + rx*lateral, z: bz*PET_FOLLOW_DIST + rz*lateral };
+}
+
+// arma (o reconstruye) las criaturas que siguen a un jugador según su lista
+// de rarezas de mascotas equipadas — se usa tanto para uno mismo como para avatares ajenos
+function rebuildPetFollowers(followerArr, parentScene, rarities){
+  followerArr.forEach(f=> parentScene.remove(f.mesh));
+  followerArr.length = 0;
+  (rarities||[]).slice(0,3).forEach((rarity, i)=>{
+    const mesh = buildPetFollowerMesh(rarity);
+    parentScene.add(mesh);
+    followerArr.push({mesh, seed:Math.random()*10});
+  });
+}
+function updatePetFollowers(followerArr, x, y, z, yaw, t){
+  const count = followerArr.length;
+  followerArr.forEach((f, i)=>{
+    const off = petFollowerOffset(i, count, yaw);
+    const bob = Math.sin(t*2 + f.seed)*0.06;
+    f.mesh.position.set(x+off.x, y+0.65+bob, z+off.z);
+    f.mesh.rotation.y = yaw + Math.sin(t*1.5+f.seed)*0.3;
+  });
+}
+
+const otherPlayersData = new Map();   // id -> {name,x,y,z,yaw,stage,coins,rebirths,pets,ts}
+const otherPlayerAvatars = new Map(); // id -> {group, target:Vector3, pets:[]}
 
 function createAvatar(id, data){
   const color = hashColor(data.name || id);
-  const group = new THREE.Group();
-  const body = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.28,0.32,1.0,8),
-    new THREE.MeshStandardMaterial({color, roughness:0.7})
-  );
-  body.position.y = 0.9;
-  group.add(body);
-  const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.24,10,10),
-    new THREE.MeshStandardMaterial({color, roughness:0.6})
-  );
-  head.position.y = 1.55;
-  group.add(head);
+  const group = buildMinerSkin(color);
   const tag = makeTextSprite(data.name || '???', '#f3e9da');
   tag.scale.set(1.3,0.5,1);
   tag.position.y = 2.15;
   group.add(tag);
   scene.add(group);
-  otherPlayerAvatars.set(id, {group, target:new THREE.Vector3(data.x,data.y,data.z)});
+  otherPlayerAvatars.set(id, {group, target:new THREE.Vector3(data.x,data.y,data.z), yaw:0, pets:[], petRarities:''});
 }
 
 function upsertOtherPlayer(id, data){
@@ -1360,13 +1441,23 @@ function upsertOtherPlayer(id, data){
   if(!otherPlayerAvatars.has(id)) createAvatar(id, data);
   const av = otherPlayerAvatars.get(id);
   av.target.set(data.x, data.y, data.z);
+  av.yaw = data.yaw || 0;
   av.group.visible = (data.stage === state.stage);
+  const rarKey = (data.pets||[]).join(',');
+  if(rarKey !== av.petRarities){
+    av.petRarities = rarKey;
+    rebuildPetFollowers(av.pets, scene, data.pets);
+  }
   onlineCountEl.textContent = 1 + otherPlayersData.size;
   if(stagesOpenFlag) renderRanking();
 }
 function removeOtherPlayer(id){
   const av = otherPlayerAvatars.get(id);
-  if(av){ scene.remove(av.group); otherPlayerAvatars.delete(id); }
+  if(av){
+    scene.remove(av.group);
+    rebuildPetFollowers(av.pets, scene, []);
+    otherPlayerAvatars.delete(id);
+  }
   otherPlayersData.delete(id);
   onlineCountEl.textContent = 1 + otherPlayersData.size;
   if(stagesOpenFlag) renderRanking();
@@ -1423,8 +1514,12 @@ async function initNet(){
 function netBroadcast(){
   if(!gameStarted) return;
   const data = {
-    name: myProfile.name, x:player.x, y:player.y, z:player.z,
+    name: myProfile.name, x:player.x, y:player.y, z:player.z, yaw:yaw,
     stage: state.stage, coins: state.coins, rebirths: state.rebirths,
+    pets: state.equippedPets.map(uid=>{
+      const p = state.pets.find(pp=>pp.uid===uid);
+      return p ? p.rarity : null;
+    }).filter(Boolean),
   };
   if(Net.mode === 'firebase'){
     Net._myRef.set(Object.assign({}, data, {ts: firebase.database.ServerValue.TIMESTAMP})).catch(()=>{});
@@ -1485,11 +1580,25 @@ async function startPresenceLoop(){
   setInterval(sweepStalePlayers, 5000);
 }
 
-function updateAvatars(dt){
+const myPetFollowers = []; // criaturas que te siguen a vos, visibles si te das vuelta a mirar
+function rebuildMyPetFollowers(){
+  const rarities = state.equippedPets.map(uid=>{
+    const p = state.pets.find(pp=>pp.uid===uid);
+    return p ? p.rarity : null;
+  }).filter(Boolean);
+  rebuildPetFollowers(myPetFollowers, scene, rarities);
+}
+
+function updateAvatars(dt, now){
   const lerpSpeed = Net.mode === 'firebase' ? 10 : 3;
+  const t = now/1000;
   otherPlayerAvatars.forEach(av=>{
     av.group.position.lerp(av.target, Math.min(1, dt*lerpSpeed));
+    av.group.rotation.y = av.yaw;
+    updatePetFollowers(av.pets, av.group.position.x, av.group.position.y, av.group.position.z, av.yaw, t);
+    av.pets.forEach(f=> f.mesh.visible = av.group.visible);
   });
+  updatePetFollowers(myPetFollowers, player.x, player.y, player.z, yaw, t);
 }
 
 /* ======================= REINICIO PERIÓDICO DE LA MINA ======================= */
@@ -1560,6 +1669,7 @@ function timeout(ms){ return new Promise(res=>setTimeout(res, ms)); }
     timeout(4000), // red de seguridad: si el storage no responde, igual dejamos jugar
   ]);
   if(state.stage !== 0) applyStageTheme(state.stage);
+  rebuildMyPetFollowers();
   updateHUD();
   playBtn.disabled = false;
   playBtn.textContent = 'JUGAR';
@@ -1614,6 +1724,10 @@ window.addEventListener('keydown', (e)=>{
     else if(nearShop) openShop();
     else if(nearPortal) openStages();
     else if(nearEgg) openPets();
+  }
+  if(k==='r' && !e.repeat && gameStarted && !isPaused){
+    player.x = SELL_POS.x; player.y = 6; player.z = SELL_POS.z; vel.y = 0;
+    toast('⬆️ Subiste a la Zona de Venta', '#3ddc84');
   }
   if(k==='escape'){
     if(shopOpenFlag) closeShop();
@@ -1693,7 +1807,7 @@ function animate(now){
   updateGlow(t);
   updateTorchFlicker(t);
   updateDust(dt);
-  updateAvatars(dt);
+  updateAvatars(dt, now);
 
   renderer.render(scene, camera);
 }
