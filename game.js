@@ -2,71 +2,65 @@
 "use strict";
 
 /* ======================= DATA ======================= */
+// hardness: nivel mínimo de pico necesario para poder picarlo (0=Madera .. 5=Mítico).
+// Si tu pico actual tiene un maxHardness menor a la dureza del mineral, no le hacés nada.
 const ORES = {
-  stone:   {name:'Piedra',    color:0x8a8a86, health:1,  value:1,    glow:false},
-  coal:    {name:'Carbón',    color:0x2b2b2e, health:2,  value:3,    glow:false},
-  copper:  {name:'Cobre',     color:0xc97a4a, health:3,  value:7,    glow:false},
-  iron:    {name:'Hierro',    color:0xb8b0a4, health:5,  value:15,   glow:false},
-  gold:    {name:'Oro',       color:0xffd23f, health:8,  value:40,   glow:true},
-  ruby:    {name:'Rubí',      color:0xff4f6d, health:12, value:90,   glow:true},
-  sapphire:{name:'Zafiro',    color:0x4f8bff, health:16, value:150,  glow:true},
-  emerald: {name:'Esmeralda', color:0x3ddc84, health:22, value:260,  glow:true},
-  diamond: {name:'Diamante',  color:0x7df9ff, health:30, value:450,  glow:true},
-  mythic:  {name:'Mítico',    color:0xff5cf0, health:50, value:2500, glow:true},
+  stone:    {name:'Piedra',      color:0x8a8a86, health:1,   value:1,    glow:false, hardness:0},
+  coal:     {name:'Carbón',      color:0x2b2b2e, health:2,   value:3,    glow:false, hardness:0},
+  copper:   {name:'Cobre',       color:0xc97a4a, health:3,   value:7,    glow:false, hardness:0},
+  iron:     {name:'Hierro',      color:0xb8b0a4, health:5,   value:15,   glow:false, hardness:1},
+  silver:   {name:'Plata',       color:0xd7d9dc, health:6,   value:22,   glow:false, hardness:1},
+  gold:     {name:'Oro',         color:0xffd23f, health:8,   value:40,   glow:true,  hardness:2},
+  platinum: {name:'Platino',     color:0xe4ddc8, health:10,  value:60,   glow:true,  hardness:2},
+  ruby:     {name:'Rubí',        color:0xff4f6d, health:13,  value:95,   glow:true,  hardness:3},
+  sapphire: {name:'Zafiro',      color:0x4f8bff, health:16,  value:150,  glow:true,  hardness:3},
+  amethyst: {name:'Amatista',    color:0x9b6bff, health:18,  value:190,  glow:true,  hardness:3},
+  emerald:  {name:'Esmeralda',   color:0x3ddc84, health:22,  value:260,  glow:true,  hardness:4},
+  opal:     {name:'Ópalo',       color:0xb8e8d8, health:26,  value:340,  glow:true,  hardness:4},
+  diamond:  {name:'Diamante',    color:0x7df9ff, health:30,  value:450,  glow:true,  hardness:4},
+  mythic:   {name:'Mítico',      color:0xff5cf0, health:50,  value:2500, glow:true,  hardness:5},
+  voidstone:{name:'Piedra Vacía',color:0x6a1fb8, health:65,  value:4200, glow:true,  hardness:5},
+  bedrock:  {name:'Roca Madre',  color:0x14100e, health:Infinity, value:0, glow:false, hardness:99, unbreakable:true},
 };
 
-const LAYERS = [
-  [['stone',70],['coal',25],['copper',5]],
-  [['stone',50],['coal',25],['copper',15],['iron',10]],
-  [['stone',40],['coal',20],['copper',15],['iron',20],['gold',5]],
-  [['stone',30],['coal',15],['copper',15],['iron',20],['gold',15],['ruby',5]],
-  [['stone',22],['coal',10],['copper',8],['iron',20],['gold',15],['ruby',15],['sapphire',10]],
-  [['stone',15],['iron',15],['gold',15],['ruby',15],['sapphire',15],['emerald',15],['coal',10]],
-  [['stone',10],['gold',10],['ruby',12],['sapphire',15],['emerald',18],['diamond',20],['mythic',5],['iron',10]],
-];
-
-const LAYERS_ICE = [
-  [['stone',55],['coal',15],['iron',20],['sapphire',10]],
-  [['stone',45],['coal',12],['iron',20],['sapphire',18],['gold',5]],
-  [['stone',35],['iron',20],['sapphire',20],['gold',15],['ruby',10]],
-  [['stone',25],['iron',15],['sapphire',22],['gold',18],['ruby',15],['emerald',5]],
-  [['stone',18],['iron',12],['sapphire',22],['gold',18],['ruby',15],['emerald',10],['diamond',5]],
-  [['stone',12],['sapphire',20],['gold',15],['ruby',15],['emerald',15],['diamond',18],['mythic',5]],
-  [['stone',8],['sapphire',15],['gold',12],['ruby',15],['emerald',18],['diamond',22],['mythic',10]],
-];
-const LAYERS_VOLCANO = [
-  [['stone',50],['coal',20],['copper',15],['ruby',15]],
-  [['stone',40],['coal',15],['copper',15],['ruby',20],['gold',10]],
-  [['stone',30],['copper',15],['ruby',22],['gold',18],['emerald',15]],
-  [['stone',22],['copper',12],['ruby',20],['gold',18],['emerald',18],['diamond',10]],
-  [['stone',15],['ruby',20],['gold',15],['emerald',20],['diamond',20],['mythic',10]],
-  [['stone',10],['ruby',18],['gold',12],['emerald',20],['diamond',25],['mythic',15]],
-  [['stone',6],['ruby',15],['emerald',20],['diamond',30],['mythic',29]],
-];
-const LAYERS_ABYSS = [
-  [['stone',40],['iron',20],['emerald',20],['diamond',20]],
-  [['stone',30],['iron',15],['emerald',22],['diamond',23],['mythic',10]],
-  [['stone',20],['iron',10],['emerald',20],['diamond',30],['mythic',20]],
-  [['stone',14],['emerald',18],['diamond',33],['mythic',35]],
-  [['stone',10],['emerald',15],['diamond',35],['mythic',40]],
-  [['stone',6],['emerald',12],['diamond',35],['mythic',47]],
-  [['stone',3],['emerald',8],['diamond',34],['mythic',55]],
-];
+// listas ordenadas de mineral más superficial a más profundo, una por etapa.
+// La profundidad "ideal" de cada mineral es su posición en esta lista.
+const BASE_ORE_ORDER    = ['stone','coal','copper','iron','silver','gold','platinum','ruby','sapphire','amethyst','emerald','opal','diamond','mythic','voidstone'];
+const ICE_ORE_ORDER     = ['stone','coal','iron','silver','sapphire','platinum','amethyst','gold','ruby','opal','emerald','diamond','mythic','voidstone','voidstone'];
+const VOLCANO_ORE_ORDER = ['stone','coal','copper','ruby','iron','platinum','gold','amethyst','opal','emerald','diamond','mythic','voidstone','voidstone','voidstone'];
+const ABYSS_ORE_ORDER   = ['stone','iron','emerald','silver','opal','amethyst','sapphire','platinum','ruby','diamond','gold','mythic','voidstone','voidstone','voidstone'];
 
 const STAGES = [
-  {name:'Mina Inicial',    unlockRebirths:0, valueMult:1,   ground:0x453a30, torch:0xffb14e, sky:['#141022','#0c0a10','#050405'], layers:LAYERS},
-  {name:'Caverna de Hielo',unlockRebirths:1, valueMult:1.6, ground:0x33474f, torch:0x6fe7ff, sky:['#0e2230','#0a1620','#04080c'], layers:LAYERS_ICE},
-  {name:'Volcán',          unlockRebirths:3, valueMult:2.6, ground:0x4a2418, torch:0xff5d3d, sky:['#2a0e0a','#1a0806','#0a0403'], layers:LAYERS_VOLCANO},
-  {name:'Abismo Místico',  unlockRebirths:6, valueMult:4.5, ground:0x3a2c4a, torch:0xff5cf0, sky:['#1c0e2a','#120a1c','#06040a'], layers:LAYERS_ABYSS},
+  {name:'Mina Inicial',    unlockRebirths:0, valueMult:1,   ground:0x453a30, torch:0xffb14e, sky:['#141022','#0c0a10','#050405'], oreOrder:BASE_ORE_ORDER},
+  {name:'Caverna de Hielo',unlockRebirths:1, valueMult:1.6, ground:0x33474f, torch:0x6fe7ff, sky:['#0e2230','#0a1620','#04080c'], oreOrder:ICE_ORE_ORDER},
+  {name:'Volcán',          unlockRebirths:3, valueMult:2.6, ground:0x4a2418, torch:0xff5d3d, sky:['#2a0e0a','#1a0806','#0a0403'], oreOrder:VOLCANO_ORE_ORDER},
+  {name:'Abismo Místico',  unlockRebirths:6, valueMult:4.5, ground:0x3a2c4a, torch:0xff5cf0, sky:['#1c0e2a','#120a1c','#06040a'], oreOrder:ABYSS_ORE_ORDER},
 ];
 
+// probabilidad de cada mineral según qué tan cerca esté su posición "ideal" en
+// oreOrder de la profundidad actual (curva gaussiana) — ver test_depth_distribution.js
+const ORE_DEPTH_SIGMA = 0.055;
+function oreWeightsForDepth(oreOrder, depthFrac){
+  const n = oreOrder.length;
+  return oreOrder.map((keyName, i)=>{
+    const center = n>1 ? i/(n-1) : 0;
+    const d = depthFrac - center;
+    const w = Math.exp(-(d*d)/(2*ORE_DEPTH_SIGMA*ORE_DEPTH_SIGMA));
+    return [keyName, Math.max(w, 0.0008)];
+  });
+}
+function pickOreForDepth(oreOrder, layerIndex, mineableLayers){
+  const depthFrac = mineableLayers>1 ? layerIndex/(mineableLayers-1) : 0;
+  return weightedPick(oreWeightsForDepth(oreOrder, depthFrac));
+}
+
 const PICKAXES = [
-  {name:'Pico de Madera',   dps:1.2, cost:0},
-  {name:'Pico de Piedra',   dps:2.2, cost:300},
-  {name:'Pico de Hierro',   dps:4,   cost:1500},
-  {name:'Pico de Oro',      dps:7,   cost:6000},
-  {name:'Pico de Diamante', dps:12,  cost:25000},
-  {name:'Pico Mítico',      dps:22,  cost:120000},
+  {name:'Pico de Madera',   dps:1.2, cost:0,      maxHardness:0},
+  {name:'Pico de Piedra',   dps:2.2, cost:300,    maxHardness:1},
+  {name:'Pico de Hierro',   dps:4,   cost:1500,   maxHardness:2},
+  {name:'Pico de Oro',      dps:7,   cost:6000,   maxHardness:3},
+  {name:'Pico de Diamante', dps:12,  cost:25000,  maxHardness:4},
+  {name:'Pico Mítico',      dps:22,  cost:120000, maxHardness:5},
 ];
 const PICKAXE_VISUALS = [
   {handle:0x6b4a2b, head:0x9a958c, emissive:false},
@@ -86,6 +80,7 @@ const BACKPACKS = [
 ];
 
 const FIELD_R = 5;
+const FIELD_DEPTH = 100; // capas de profundidad; la última (más honda) es roca madre indestructible
 const GROUND_R = 14;
 const REACH = 5;
 const GRAVITY = 22;
@@ -271,12 +266,13 @@ function makeBlock(x,y,z,type){
 }
 
 function buildField(){
-  const stageLayers = STAGES[state.stage].layers;
+  const oreOrder = STAGES[state.stage].oreOrder;
+  const mineableLayers = FIELD_DEPTH - 1; // la última capa es roca madre, no entra en el sorteo
   for(let x=-FIELD_R; x<=FIELD_R; x++){
     for(let z=-FIELD_R; z<=FIELD_R; z++){
-      for(let li=0; li<stageLayers.length; li++){
+      for(let li=0; li<FIELD_DEPTH; li++){
         const y = -li;
-        const type = weightedPick(stageLayers[li]);
+        const type = (li === FIELD_DEPTH-1) ? 'bedrock' : pickOreForDepth(oreOrder, li, mineableLayers);
         makeBlock(x,y,z,type);
       }
     }
@@ -316,12 +312,45 @@ function buildGround(){
 }
 buildGround();
 
-// cambia de etapa: reskinea piso/cielo/antorchas y regenera el campo minero con
-// la tabla de probabilidades de la nueva etapa
+const WALL_R = FIELD_R + 1;
+const wallSet = new Set();
+let wallMat = null;
+function buildWalls(){
+  // anillo hueco alrededor del campo minero, desde justo debajo de la superficie
+  // (y=0 ya lo cubre el piso decorativo) hasta la capa de roca madre. Es puramente
+  // estructural: no es picable, ni aparece en 'blocks', solo bloquea el paso.
+  const cells = [];
+  for(let x=-WALL_R; x<=WALL_R; x++){
+    for(let z=-WALL_R; z<=WALL_R; z++){
+      if(Math.max(Math.abs(x),Math.abs(z)) !== WALL_R) continue;
+      for(let li=1; li<FIELD_DEPTH; li++){
+        const y = -li;
+        cells.push([x,y,z]);
+        wallSet.add(key(x,y,z));
+      }
+    }
+  }
+  const geo = new THREE.BoxGeometry(1,1,1);
+  wallMat = new THREE.MeshStandardMaterial({color:STAGES[0].ground, roughness:1});
+  const mesh = new THREE.InstancedMesh(geo, wallMat, cells.length);
+  const dummy = new THREE.Object3D();
+  cells.forEach(([x,y,z], i)=>{
+    dummy.position.set(x,y,z);
+    dummy.updateMatrix();
+    mesh.setMatrixAt(i, dummy.matrix);
+  });
+  mesh.instanceMatrix.needsUpdate = true;
+  scene.add(mesh);
+}
+buildWalls();
+
+// cambia de etapa: reskinea piso/paredes/cielo/antorchas y regenera el campo minero
+// con la tabla de probabilidades de la nueva etapa
 function applyStageTheme(stageIdx){
   const stg = STAGES[stageIdx];
   state.stage = stageIdx;
   groundMat.color.setHex(stg.ground);
+  wallMat.color.setHex(stg.ground);
   paintSky(stg.sky);
   torches.forEach(tr=>{
     if(!tr.themed) return;
@@ -331,18 +360,19 @@ function applyStageTheme(stageIdx){
   regenerateField();
 }
 
-// safety floor far below so the player can never fall through the world
+// safety floor far below the bedrock layer, so the player can never fall through
+// the world even in edge cases (bedrock itself is already unbreakable and solid)
 const safetyFloor = new THREE.Mesh(
   new THREE.PlaneGeometry(400,400),
   new THREE.MeshBasicMaterial({color:0x08060a})
 );
 safetyFloor.rotation.x = -Math.PI/2;
-safetyFloor.position.y = -9.5;
+safetyFloor.position.y = -(FIELD_DEPTH + 5);
 scene.add(safetyFloor);
 
 function solidAt(x,y,z){
   const k = key(x,y,z);
-  return blocks.has(k) || groundSet.has(k);
+  return blocks.has(k) || groundSet.has(k) || wallSet.has(k);
 }
 
 /* ---------- station props ---------- */
@@ -666,9 +696,6 @@ let rebirthOpenFlag = false;
 let stagesOpenFlag = false;
 let petsOpenFlag = false;
 
-const raycaster = new THREE.Raycaster();
-raycaster.far = REACH;
-
 function updatePlayer(dt){
   const speed = MOVE_SPEED * (keysState.shift ? SPRINT_MULT : 1);
   let ix = (keysState.d?1:0) - (keysState.a?1:0);
@@ -712,31 +739,56 @@ function updatePlayer(dt){
   }
   if(keysState.space && onGround){ vel.y = JUMP_SPEED; onGround = false; }
 
-  if(player.y < -30){ player.x=0; player.y=6; player.z=8; vel.y=0; }
+  if(player.y < -(FIELD_DEPTH + 3)){ player.x=0; player.y=6; player.z=8; vel.y=0; }
 }
 
 /* ======================= MINING ======================= */
+// en vez de tirar el Raycaster de three.js contra los ~12.100 bloques del campo
+// (caro y no escala), avanzamos a pasos chicos a lo largo de la mirada y
+// consultamos directamente la grilla lógica — cuesta lo mismo sin importar
+// cuántos bloques haya en total.
+const RAY_STEP = 0.06;
 const dirVec = new THREE.Vector3();
+const marchPos = new THREE.Vector3();
 function getTarget(){
   camera.getWorldDirection(dirVec);
-  raycaster.set(camera.position, dirVec);
-  const hits = raycaster.intersectObjects(blockGroup.children, false);
-  return hits.length ? hits[0] : null;
+  marchPos.copy(camera.position);
+  const steps = Math.ceil(REACH / RAY_STEP);
+  for(let i=0;i<steps;i++){
+    marchPos.addScaledVector(dirVec, RAY_STEP);
+    const gx = Math.round(marchPos.x), gy = Math.round(marchPos.y), gz = Math.round(marchPos.z);
+    const k = key(gx,gy,gz);
+    if(blocks.has(k)){
+      return { key:k, distance: camera.position.distanceTo(marchPos) };
+    }
+  }
+  return null;
 }
 
+let lastLockToast = 0;
 function mine(hit, dt){
-  const k = hit.object.userData.key;
-  const entry = blocks.get(k);
+  const entry = blocks.get(hit.key);
   if(!entry) return;
+  const info = ORES[entry.type];
+  if(info.unbreakable){
+    const now = performance.now();
+    if(now - lastLockToast > 1500){ toast('La Roca Madre es indestructible', '#ff5d5d'); lastLockToast = now; }
+    return;
+  }
+  if(info.hardness > PICKAXES[state.pickaxeTier].maxHardness){
+    const now = performance.now();
+    if(now - lastLockToast > 1500){ toast('🔒 Necesitás un pico mejor para picar '+info.name, '#ff5d5d'); lastLockToast = now; }
+    return;
+  }
   entry.health -= PICKAXES[state.pickaxeTier].dps * petBonuses().dpsMult * dt;
   if(entry.health <= 0){
-    breakBlock(k);
+    breakBlock(hit.key);
   }
 }
 
 function breakBlock(k){
   const entry = blocks.get(k);
-  if(!entry) return;
+  if(!entry || ORES[entry.type].unbreakable) return;
   const pos = entry.mesh.position.clone();
   const type = entry.type;
   blockGroup.remove(entry.mesh);
@@ -773,6 +825,7 @@ function sellAll(){
   state.coins += value;
   state.inventory = {};
   toast('Vendido por $' + fmt(value), '#ffd23f');
+  markDirty();
   updateHUD();
 }
 
@@ -842,6 +895,8 @@ const promptPortal = document.getElementById('promptPortal');
 const promptEgg = document.getElementById('promptEgg');
 const onlineCountEl = document.getElementById('onlineCount');
 const stageNameEl = document.getElementById('stageName');
+const resetBadge = document.getElementById('resetBadge');
+const resetCountdownEl = document.getElementById('resetCountdown');
 const toastContainer = document.getElementById('toastContainer');
 
 function toast(text, color){
@@ -859,11 +914,26 @@ function toast(text, color){
 // tanto si lo estás picando activamente como si solo lo estás mirando
 function updateTargetPanel(hit){
   if(hit && hit.distance <= REACH){
-    const entry = blocks.get(hit.object.userData.key);
+    const entry = blocks.get(hit.key);
     if(entry){
-      const frac = Math.max(entry.health,0) / ORES[entry.type].health;
-      targetName.textContent = ORES[entry.type].name;
-      targetHealthInner.style.width = (frac*100) + '%';
+      const info = ORES[entry.type];
+      if(info.unbreakable){
+        targetName.textContent = '🔒 ' + info.name;
+        targetName.style.color = 'var(--red)';
+        targetHealthInner.style.width = '100%';
+        targetHealthInner.style.background = 'var(--red)';
+      } else if(info.hardness > PICKAXES[state.pickaxeTier].maxHardness){
+        targetName.textContent = '🔒 ' + info.name + ' (necesitás mejor pico)';
+        targetName.style.color = 'var(--red)';
+        targetHealthInner.style.width = '100%';
+        targetHealthInner.style.background = 'var(--red)';
+      } else {
+        const frac = Math.max(entry.health,0) / info.health;
+        targetName.textContent = info.name;
+        targetName.style.color = 'var(--text)';
+        targetHealthInner.style.width = (frac*100) + '%';
+        targetHealthInner.style.background = 'var(--amber)';
+      }
       targetInfo.classList.add('show');
       return;
     }
@@ -912,6 +982,10 @@ const shopCoins = document.getElementById('shopCoins');
 const pickaxeList = document.getElementById('pickaxeList');
 const backpackList = document.getElementById('backpackList');
 
+function oresAtHardness(h){
+  return Object.values(ORES).filter(o=>o.hardness===h && !o.unbreakable).map(o=>o.name).join(', ');
+}
+
 function renderShop(){
   shopCoins.textContent = '$' + fmt(state.coins);
 
@@ -919,14 +993,14 @@ function renderShop(){
   PICKAXES.forEach((p,i)=>{
     const row = document.createElement('div');
     row.className = 'shop-row' + (i===state.pickaxeTier ? ' owned':'');
-    row.innerHTML = '<div class="shop-row-main"><b>'+p.name+'</b><span>'+p.dps.toFixed(1)+' golpes/seg</span></div>';
+    row.innerHTML = '<div class="shop-row-main"><b>'+p.name+'</b><span>'+p.dps.toFixed(1)+' golpes/seg · pica: '+oresAtHardness(p.maxHardness)+'</span></div>';
     const btn = document.createElement('button');
     if(i < state.pickaxeTier) btn.textContent = 'Superado';
     else if(i === state.pickaxeTier) btn.textContent = 'Equipado';
     else if(i === state.pickaxeTier+1) btn.textContent = '$'+fmt(p.cost);
     else btn.textContent = 'Bloqueado';
     btn.disabled = !(i===state.pickaxeTier+1 && state.coins>=p.cost);
-    btn.onclick = ()=>{ state.coins -= p.cost; state.pickaxeTier = i; equipPickaxeVisual(); updateHUD(); };
+    btn.onclick = ()=>{ state.coins -= p.cost; state.pickaxeTier = i; equipPickaxeVisual(); markDirty(); updateHUD(); };
     row.appendChild(btn);
     pickaxeList.appendChild(row);
   });
@@ -942,7 +1016,7 @@ function renderShop(){
     else if(i === state.backpackTier+1) btn.textContent = '$'+fmt(b.cost);
     else btn.textContent = 'Bloqueado';
     btn.disabled = !(i===state.backpackTier+1 && state.coins>=b.cost);
-    btn.onclick = ()=>{ state.coins -= b.cost; state.backpackTier = i; updateHUD(); };
+    btn.onclick = ()=>{ state.coins -= b.cost; state.backpackTier = i; markDirty(); updateHUD(); };
     row.appendChild(btn);
     backpackList.appendChild(row);
   });
@@ -952,6 +1026,7 @@ function openShop(){
   shopOpenFlag = true;
   isPaused = true;
   isMining = false;
+  releaseLook();
   renderShop();
   shopModal.classList.remove('hidden');
 }
@@ -959,6 +1034,7 @@ function closeShop(){
   shopModal.classList.add('hidden');
   shopOpenFlag = false;
   isPaused = false;
+  requestLook();
 }
 document.getElementById('shopClose').onclick = closeShop;
 
@@ -969,12 +1045,14 @@ function openRebirth(){
   rebirthOpenFlag = true;
   isPaused = true;
   isMining = false;
+  releaseLook();
   rebirthModal.classList.remove('hidden');
 }
 function closeRebirth(){
   rebirthModal.classList.add('hidden');
   rebirthOpenFlag = false;
   isPaused = false;
+  requestLook();
 }
 document.getElementById('rebirthCancel').onclick = closeRebirth;
 document.getElementById('rebirthConfirm').onclick = ()=>{
@@ -986,6 +1064,7 @@ document.getElementById('rebirthConfirm').onclick = ()=>{
   state.inventory = {};
   regenerateField();
   equipPickaxeVisual();
+  markDirty();
   updateHUD();
   toast('¡Renaciste! Multiplicador x'+state.multiplier, '#ff5cf0');
   closeRebirth();
@@ -1012,6 +1091,7 @@ function renderStages(){
     btn.onclick = ()=>{
       applyStageTheme(i);
       player.x = 0; player.y = 6; player.z = 8; vel.y = 0;
+      markDirty();
       updateHUD();
       renderStages();
       toast('Viajaste a '+stg.name, hexStr(stg.torch));
@@ -1044,6 +1124,7 @@ function openStages(){
   stagesOpenFlag = true;
   isPaused = true;
   isMining = false;
+  releaseLook();
   renderStages();
   renderRanking();
   stagesModal.classList.remove('hidden');
@@ -1052,6 +1133,7 @@ function closeStages(){
   stagesModal.classList.add('hidden');
   stagesOpenFlag = false;
   isPaused = false;
+  requestLook();
 }
 document.getElementById('stagesClose').onclick = closeStages;
 
@@ -1075,6 +1157,7 @@ function hatchEgg(egg){
   };
   state.pets.push(inst);
   toast('¡Obtuviste a '+template.name+'! ('+PET_RARITIES[rarity].name+')', hexStr(PET_RARITIES[rarity].color));
+  markDirty();
   updateHUD();
   renderEggs();
   renderPets();
@@ -1091,6 +1174,7 @@ function togglePetEquip(uid){
     }
     state.equippedPets.push(uid);
   }
+  markDirty();
   updateHUD();
   renderPets();
 }
@@ -1143,6 +1227,7 @@ function openPets(){
   petsOpenFlag = true;
   isPaused = true;
   isMining = false;
+  releaseLook();
   renderEggs();
   renderPets();
   petsModal.classList.remove('hidden');
@@ -1151,6 +1236,7 @@ function closePets(){
   petsModal.classList.add('hidden');
   petsOpenFlag = false;
   isPaused = false;
+  requestLook();
 }
 document.getElementById('petsClose').onclick = closePets;
 
@@ -1181,7 +1267,6 @@ async function loadProfile(){
   }catch(e){ /* seguimos con el perfil generado en memoria */ }
   if(nameInput) nameInput.value = myProfile.name;
 }
-loadProfile();
 
 async function saveProfile(){
   try{
@@ -1192,6 +1277,49 @@ async function saveProfile(){
     }
   }catch(e){ /* no crítico */ }
 }
+
+/* ---------- progreso del jugador (monedas, pico, mochila, mascotas, etapa...) ---------- */
+// Se guarda personal (shared:false / localStorage), NUNCA compartido — es tuyo,
+// nadie más lo ve. Se guarda con un pequeño retraso (no en cada evento) para no
+// saturar el storage; "dirty" marca que hay cambios pendientes de guardar.
+let progressDirty = false;
+function markDirty(){ progressDirty = true; }
+
+async function loadProgress(){
+  try{
+    let raw = null;
+    if(typeof window.storage !== 'undefined' && window.storage){
+      const res = await window.storage.get('progress', false);
+      if(res && res.value) raw = res.value;
+    } else if(typeof localStorage !== 'undefined'){
+      raw = localStorage.getItem('mina3d_progress');
+    }
+    if(raw){
+      const saved = JSON.parse(raw);
+      Object.assign(state, saved);
+    }
+  }catch(e){ /* no había progreso guardado todavía, o falló — arrancamos de 0 */ }
+}
+
+async function persistProgress(){
+  if(!progressDirty) return;
+  progressDirty = false;
+  const payload = JSON.stringify({
+    coins: state.coins, rebirths: state.rebirths, multiplier: state.multiplier,
+    pickaxeTier: state.pickaxeTier, backpackTier: state.backpackTier,
+    inventory: state.inventory, stage: state.stage,
+    pets: state.pets, equippedPets: state.equippedPets,
+  });
+  try{
+    if(typeof window.storage !== 'undefined' && window.storage){
+      await window.storage.set('progress', payload, false);
+    } else if(typeof localStorage !== 'undefined'){
+      localStorage.setItem('mina3d_progress', payload);
+    }
+  }catch(e){ progressDirty = true; /* reintentamos en el próximo ciclo */ }
+}
+setInterval(persistProgress, 3000);
+window.addEventListener('beforeunload', persistProgress);
 
 function hashColor(str){
   let h = 0;
@@ -1364,11 +1492,80 @@ function updateAvatars(dt){
   });
 }
 
+/* ======================= REINICIO PERIÓDICO DE LA MINA ======================= */
+// Cada 30 minutos (alineado al reloj real, sin necesitar red) la mina activa
+// se regenera por completo y los jugadores son teletransportados a la superficie.
+const RESET_INTERVAL_MS = 30*60*1000;
+function nextResetBoundary(now){ return Math.ceil(now/RESET_INTERVAL_MS)*RESET_INTERVAL_MS; }
+let nextResetAt = nextResetBoundary(Date.now());
+
+function doMineReset(){
+  regenerateField();
+  player.x = 0; player.y = 6; player.z = 8; vel.y = 0;
+  toast('⛏️ ¡La mina se regeneró! Todos a la superficie.', '#6fe7ff');
+  nextResetAt = nextResetBoundary(Date.now() + 1);
+}
+
+function updateResetCountdown(){
+  const remain = Math.max(0, nextResetAt - Date.now());
+  if(remain <= 0){ doMineReset(); return; }
+  const mm = Math.floor(remain/60000);
+  const ss = Math.floor((remain%60000)/1000);
+  resetCountdownEl.textContent = String(mm).padStart(2,'0') + ':' + String(ss).padStart(2,'0');
+  resetBadge.classList.toggle('warn', remain < 60000);
+}
+
+let resetTimerStarted = false;
+function startResetTimer(){
+  if(resetTimerStarted) return;
+  resetTimerStarted = true;
+  updateResetCountdown();
+  setInterval(updateResetCountdown, 1000);
+}
+
 /* ======================= INPUT ======================= */
 const startScreen = document.getElementById('startScreen');
 const nameInput = document.getElementById('nameInput');
+const playBtn = document.getElementById('playBtn');
 
-document.getElementById('playBtn').onclick = ()=>{
+// Pointer Lock real: esconde el cursor del sistema operativo y da movimiento
+// relativo sin límite (antes, sin esto, el cursor chocaba contra el borde de
+// la ventana y la cámara dejaba de girar — por eso "se sentía trabada").
+// Si el entorno lo rechaza (pointerlockerror), cae solo a rotación libre
+// (la que había antes) como red de seguridad.
+let pointerLocked = false;
+let pointerLockSupported = true;
+
+function requestLook(){
+  if(!pointerLockSupported || pointerLocked) return;
+  try{ canvas.requestPointerLock(); }catch(e){ /* se resuelve vía pointerlockerror */ }
+}
+function releaseLook(){
+  try{ if(document.pointerLockElement === canvas) document.exitPointerLock(); }catch(e){ /* no crítico */ }
+}
+document.addEventListener('pointerlockchange', ()=>{
+  pointerLocked = (document.pointerLockElement === canvas);
+});
+document.addEventListener('pointerlockerror', ()=>{
+  pointerLockSupported = false;
+  console.warn('[MINA3D] Pointer Lock no disponible en este entorno, uso rotación libre sin bloqueo de cursor.');
+});
+
+playBtn.disabled = true;
+playBtn.textContent = 'Cargando...';
+function timeout(ms){ return new Promise(res=>setTimeout(res, ms)); }
+(async ()=>{
+  await Promise.race([
+    (async ()=>{ await loadProfile(); await loadProgress(); })(),
+    timeout(4000), // red de seguridad: si el storage no responde, igual dejamos jugar
+  ]);
+  if(state.stage !== 0) applyStageTheme(state.stage);
+  updateHUD();
+  playBtn.disabled = false;
+  playBtn.textContent = 'JUGAR';
+})();
+
+playBtn.onclick = ()=>{
   const typed = nameInput.value.trim();
   if(typed) myProfile.name = typed.slice(0,16);
   saveProfile();
@@ -1377,6 +1574,8 @@ document.getElementById('playBtn').onclick = ()=>{
   gameStarted = true;
   equipPickaxeVisual();
   startPresenceLoop();
+  startResetTimer();
+  requestLook();
 };
 
 canvas.addEventListener('contextmenu', (e)=> e.preventDefault());
@@ -1389,6 +1588,10 @@ window.addEventListener('mouseup', (e)=>{
   if(e.button === 0) isMining = false;
 });
 window.addEventListener('blur', ()=>{ isMining=false; });
+
+canvas.addEventListener('click', ()=>{
+  if(gameStarted && !isPaused) requestLook();
+});
 
 window.addEventListener('mousemove', (e)=>{
   if(!gameStarted || isPaused) return;
