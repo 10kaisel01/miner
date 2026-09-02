@@ -81,7 +81,7 @@ const BACKPACKS = [
 
 const FIELD_R = 5;
 const FIELD_DEPTH = 100; // capas de profundidad; la última (más honda) es roca madre indestructible
-const GROUND_R = 18;
+const GROUND_R = 22;
 const REACH = 5;
 const GRAVITY = 22;
 const JUMP_SPEED = 8;
@@ -90,9 +90,9 @@ const SPRINT_MULT = 1.6;
 const EYE_HEIGHT = 1.5;
 const SELL_POS = {x:-9, z:0};
 const SHOP_POS = {x:9, z:0};
-const PORTAL_POS = {x:-3, z:12};
-const EGG_POS = {x:3, z:12};
-const REBIRTH_POS = {x:0, z:16};
+const PORTAL_POS = {x:-8, z:14};
+const EGG_POS = {x:8, z:14};
+const REBIRTH_POS = {x:0, z:20};
 
 /* ---------- pets & eggs ---------- */
 const PET_RARITIES = {
@@ -513,7 +513,7 @@ function buildStation(pos, color, shapeGeo, label){
   group.add(icon);
 
   const sign = makeTextSprite(label, hexStr(color));
-  sign.position.set(pos.x, 3.3, pos.z);
+  sign.position.set(pos.x, 4.15, pos.z);
   group.add(sign);
 
   scene.add(group);
@@ -833,6 +833,12 @@ let shopOpenFlag = false;
 let rebirthOpenFlag = false;
 let stagesOpenFlag = false;
 let petsOpenFlag = false;
+let cameraMode = 'first'; // 'first' | 'third'
+let myAvatar = null;
+
+const CHEAT_CODE = 'diosmodo';
+let cheatBuffer = '';
+let godModeToggled = false;
 
 function updatePlayer(dt){
   const speed = MOVE_SPEED * (keysState.shift ? SPRINT_MULT : 1);
@@ -888,16 +894,18 @@ function updatePlayer(dt){
 const RAY_STEP = 0.06;
 const dirVec = new THREE.Vector3();
 const marchPos = new THREE.Vector3();
+const eyePos = new THREE.Vector3();
 function getTarget(){
+  eyePos.set(player.x, player.y+EYE_HEIGHT, player.z);
   camera.getWorldDirection(dirVec);
-  marchPos.copy(camera.position);
+  marchPos.copy(eyePos);
   const steps = Math.ceil(REACH / RAY_STEP);
   for(let i=0;i<steps;i++){
     marchPos.addScaledVector(dirVec, RAY_STEP);
     const gx = Math.round(marchPos.x), gy = Math.round(marchPos.y), gz = Math.round(marchPos.z);
     const k = key(gx,gy,gz);
     if(blocks.has(k)){
-      return { key:k, distance: camera.position.distanceTo(marchPos) };
+      return { key:k, distance: eyePos.distanceTo(marchPos) };
     }
   }
   return null;
@@ -1030,6 +1038,7 @@ const promptPortal = document.getElementById('promptPortal');
 const promptEgg = document.getElementById('promptEgg');
 const promptRebirth = document.getElementById('promptRebirth');
 const onlineCountEl = document.getElementById('onlineCount');
+const netStatusBadge = document.getElementById('netStatusBadge');
 const stageNameEl = document.getElementById('stageName');
 const resetBadge = document.getElementById('resetBadge');
 const resetCountdownEl = document.getElementById('resetCountdown');
@@ -1536,25 +1545,44 @@ function buildMinerSkin(suitColor){
 }
 
 // mascota compañera: criatura chica y estilizada, coloreada según su rareza
+const PET_RARITY_SCALE = {common:0.85, rare:0.95, epic:1.05, legendary:1.18, mythic:1.32};
 function buildPetFollowerMesh(rarity){
   const info = PET_RARITIES[rarity] || PET_RARITIES.common;
   const group = new THREE.Group();
   const mat = new THREE.MeshStandardMaterial({
     color:info.color, roughness:0.4, metalness:0.2,
-    emissive:info.color, emissiveIntensity:0.35,
+    emissive:info.color, emissiveIntensity: (rarity==='mythic'||rarity==='legendary') ? 0.55 : 0.32,
   });
-  const body = new THREE.Mesh(new THREE.SphereGeometry(0.16,10,10), mat);
+
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.15,10,10), mat);
+  body.scale.set(1, 0.85, 1.15);
   group.add(body);
-  const earL = new THREE.Mesh(new THREE.ConeGeometry(0.06,0.14,6), mat);
-  earL.position.set(-0.09,0.16,0); earL.rotation.z = 0.3;
+
+  const legGeo = new THREE.SphereGeometry(0.045,6,6);
+  [[-0.09,-0.13,0.08],[0.09,-0.13,0.08],[-0.09,-0.13,-0.08],[0.09,-0.13,-0.08]].forEach(([lx,ly,lz])=>{
+    const leg = new THREE.Mesh(legGeo, mat);
+    leg.position.set(lx,ly,lz);
+    group.add(leg);
+  });
+
+  const earL = new THREE.Mesh(new THREE.ConeGeometry(0.055,0.13,6), mat);
+  earL.position.set(-0.08,0.17,0.02); earL.rotation.z = 0.35;
   group.add(earL);
-  const earR = new THREE.Mesh(new THREE.ConeGeometry(0.06,0.14,6), mat);
-  earR.position.set(0.09,0.16,0); earR.rotation.z = -0.3;
+  const earR = new THREE.Mesh(new THREE.ConeGeometry(0.055,0.13,6), mat);
+  earR.position.set(0.08,0.17,0.02); earR.rotation.z = -0.35;
   group.add(earR);
-  const eyeGeo = new THREE.SphereGeometry(0.025,6,6);
+
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(0.05,0.22,6), mat);
+  tail.position.set(0,0.03,-0.19);
+  tail.rotation.x = Math.PI/2 + 0.5;
+  group.add(tail);
+
+  const eyeGeo = new THREE.SphereGeometry(0.026,6,6);
   const eyeMat = new THREE.MeshBasicMaterial({color:0x0c0a10});
-  const eyeL = new THREE.Mesh(eyeGeo, eyeMat); eyeL.position.set(-0.06,0.02,0.14); group.add(eyeL);
-  const eyeR = new THREE.Mesh(eyeGeo, eyeMat); eyeR.position.set(0.06,0.02,0.14); group.add(eyeR);
+  const eyeL = new THREE.Mesh(eyeGeo, eyeMat); eyeL.position.set(-0.06,0.03,0.15); group.add(eyeL);
+  const eyeR = new THREE.Mesh(eyeGeo, eyeMat); eyeR.position.set(0.06,0.03,0.15); group.add(eyeR);
+
+  group.scale.setScalar(PET_RARITY_SCALE[rarity] || 1);
   return group;
 }
 
@@ -1662,21 +1690,49 @@ async function initNet(){
       playersRef.on('child_added',   snap => { if(Net._onUpdate) Net._onUpdate(snap.key, snap.val()); });
       playersRef.on('child_changed', snap => { if(Net._onUpdate) Net._onUpdate(snap.key, snap.val()); });
       playersRef.on('child_removed', snap => { if(Net._onRemove) Net._onRemove(snap.key); });
+      playersRef.on('value', ()=>{}, err => reportNetError('conexión / permisos de Realtime Database', err));
       Net._myRef = myRef;
       Net.mode = 'firebase';
       console.log('[MINA3D] Multijugador: Firebase Realtime Database (sync en vivo).');
+      setNetStatusBadge('firebase');
       return;
     }catch(e){
       console.warn('[MINA3D] No se pudo inicializar Firebase, uso modo de respaldo.', e);
+      reportNetError('inicialización', e);
     }
   }
   if(detectNetMode() === 'storage' || (typeof window.storage !== 'undefined' && window.storage)){
     Net.mode = 'storage';
     console.log('[MINA3D] Multijugador: almacenamiento compartido de claude.ai (polling).');
+    setNetStatusBadge('storage');
     return;
   }
   Net.mode = 'offline';
   console.log('[MINA3D] Multijugador no disponible en este entorno, jugando en solitario.');
+  setNetStatusBadge('offline');
+}
+
+function setNetStatusBadge(mode){
+  if(!netStatusBadge) return;
+  const map = {
+    firebase: {text:'🟢 Firebase (en vivo)', cls:'net-ok'},
+    storage:  {text:'🟡 Storage (con saltos)', cls:'net-mid'},
+    offline:  {text:'🔴 Sin conexión (solo)', cls:'net-off'},
+  };
+  const m = map[mode] || map.offline;
+  netStatusBadge.textContent = m.text;
+  netStatusBadge.className = 'panel ' + m.cls;
+}
+
+let lastNetErrorToast = 0;
+function reportNetError(context, err){
+  console.error('[MINA3D] Error de red ('+context+'):', err);
+  const now = performance.now();
+  if(now - lastNetErrorToast > 8000){
+    lastNetErrorToast = now;
+    const msg = (err && (err.message || err.code)) || 'error desconocido';
+    toast('⚠️ Firebase: ' + msg + ' (ver consola F12)', '#ff5d5d');
+  }
 }
 
 function netBroadcast(){
@@ -1690,7 +1746,8 @@ function netBroadcast(){
     }).filter(Boolean),
   };
   if(Net.mode === 'firebase'){
-    Net._myRef.set(Object.assign({}, data, {ts: firebase.database.ServerValue.TIMESTAMP})).catch(()=>{});
+    Net._myRef.set(Object.assign({}, data, {ts: firebase.database.ServerValue.TIMESTAMP}))
+      .catch(err => reportNetError('escritura de presencia', err));
   } else if(Net.mode === 'storage'){
     try{
       window.storage.set('players:'+myProfile.id, JSON.stringify(Object.assign({}, data, {ts:Date.now()})), true).catch(()=>{});
@@ -1815,7 +1872,12 @@ let pointerLockSupported = true;
 
 function requestLook(){
   if(!pointerLockSupported || pointerLocked) return;
-  try{ canvas.requestPointerLock(); }catch(e){ /* se resuelve vía pointerlockerror */ }
+  try{
+    const p = canvas.requestPointerLock();
+    if(p && typeof p.catch === 'function'){
+      p.catch(err => console.warn('[MINA3D] Pointer Lock rechazado:', err));
+    }
+  }catch(e){ /* se resuelve vía pointerlockerror */ }
 }
 function releaseLook(){
   try{ if(document.pointerLockElement === canvas) document.exitPointerLock(); }catch(e){ /* no crítico */ }
@@ -1827,6 +1889,11 @@ document.addEventListener('pointerlockerror', ()=>{
   pointerLockSupported = false;
   console.warn('[MINA3D] Pointer Lock no disponible en este entorno, uso rotación libre sin bloqueo de cursor.');
 });
+// reintenta cada pocos segundos si no está bloqueado (en algunos equipos, ej.
+// Chromebooks, el primer intento puede fallar por timing y funcionar después)
+setInterval(()=>{
+  if(gameStarted && !isPaused && pointerLockSupported && !pointerLocked) requestLook();
+}, 4000);
 
 playBtn.disabled = true;
 playBtn.textContent = 'Cargando...';
@@ -1851,6 +1918,9 @@ playBtn.onclick = ()=>{
   hud.classList.remove('hidden');
   gameStarted = true;
   equipPickaxeVisual();
+  myAvatar = buildMinerSkin(hashColor(myProfile.name));
+  myAvatar.visible = false;
+  scene.add(myAvatar);
   startPresenceLoop();
   startResetTimer();
   requestLook();
@@ -1897,6 +1967,38 @@ window.addEventListener('keydown', (e)=>{
   if(k==='r' && !e.repeat && gameStarted && !isPaused){
     player.x = SELL_POS.x; player.y = 6; player.z = SELL_POS.z; vel.y = 0;
     toast('⬆️ Subiste a la Zona de Venta', '#3ddc84');
+  }
+  if(k==='3' && !e.repeat && gameStarted && !isPaused){
+    cameraMode = (cameraMode==='first') ? 'third' : 'first';
+    toast(cameraMode==='third' ? '📷 Cámara en tercera persona' : '📷 Cámara en primera persona', '#6fe7ff');
+  }
+  if(gameStarted && !isPaused && e.key.length===1){
+    cheatBuffer = (cheatBuffer + e.key.toLowerCase()).slice(-CHEAT_CODE.length);
+    if(cheatBuffer === CHEAT_CODE){
+      cheatBuffer = '';
+      if(!godModeToggled){
+        state.coins += 1000000;
+        godModeToggled = true;
+        markDirty();
+        updateHUD();
+        toast('✨ ¡MODO DIOS ACTIVADO! +$1.000.000', '#ffd23f');
+      } else {
+        state.coins = 0;
+        state.rebirths = 0;
+        state.multiplier = 1;
+        state.pickaxeTier = 0;
+        state.backpackTier = 0;
+        state.inventory = {};
+        state.pets = [];
+        state.equippedPets = [];
+        godModeToggled = false;
+        equipPickaxeVisual();
+        rebuildMyPetFollowers();
+        markDirty();
+        updateHUD();
+        toast('💀 Perdiste todo tu progreso...', '#ff5d5d');
+      }
+    }
   }
   if(k==='escape'){
     if(shopOpenFlag) closeShop();
@@ -1951,9 +2053,24 @@ function animate(now){
 
   if(gameStarted && !isPaused){
     updatePlayer(dt);
-    camera.position.set(player.x, player.y+EYE_HEIGHT, player.z);
     camera.rotation.set(pitch, yaw, 0);
+    if(cameraMode === 'third'){
+      const dist = 3.4;
+      camera.position.set(
+        player.x + Math.sin(yaw)*dist,
+        player.y + EYE_HEIGHT + 1.1,
+        player.z + Math.cos(yaw)*dist
+      );
+    } else {
+      camera.position.set(player.x, player.y+EYE_HEIGHT, player.z);
+    }
     headlamp.position.set(player.x, player.y+EYE_HEIGHT, player.z);
+    if(myAvatar){
+      myAvatar.visible = (cameraMode === 'third');
+      myAvatar.position.set(player.x, player.y, player.z);
+      myAvatar.rotation.y = yaw;
+    }
+    if(pickaxeGroup){ pickaxeGroup.visible = (cameraMode === 'first'); }
 
     const hit = getTarget();
     if(hit && hit.distance <= REACH){
