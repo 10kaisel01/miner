@@ -63,12 +63,12 @@ const PICKAXES = [
   {name:'Pico Mítico',      dps:22,  cost:120000, maxHardness:5},
 ];
 const PICKAXE_VISUALS = [
-  {handle:0x6b4a2b, head:0x9a958c, emissive:false},
-  {handle:0x6b4a2b, head:0xa9a49c, emissive:false},
-  {handle:0x5a3f26, head:0xd3d7db, emissive:false},
-  {handle:0x4a3320, head:0xffd23f, emissive:true},
-  {handle:0x3a2a1a, head:0x7df9ff, emissive:true},
-  {handle:0x2a1a2a, head:0xff5cf0, emissive:true},
+  {handle:0x6b4a2b, head:0x9a958c, emissive:false, scale:0.85, gem:false},
+  {handle:0x6b4a2b, head:0xa9a49c, emissive:false, scale:0.92, gem:false},
+  {handle:0x5a3f26, head:0xd3d7db, emissive:false, scale:1.00, gem:false},
+  {handle:0x4a3320, head:0xffd23f, emissive:true,  scale:1.07, gem:true},
+  {handle:0x3a2a1a, head:0x7df9ff, emissive:true,  scale:1.14, gem:true},
+  {handle:0x2a1a2a, head:0xff5cf0, emissive:true,  scale:1.22, gem:true},
 ];
 const BACKPACKS = [
   {name:'Saco Básico',        cap:40,   cost:0},
@@ -81,7 +81,7 @@ const BACKPACKS = [
 
 const FIELD_R = 5;
 const FIELD_DEPTH = 100; // capas de profundidad; la última (más honda) es roca madre indestructible
-const GROUND_R = 14;
+const GROUND_R = 18;
 const REACH = 5;
 const GRAVITY = 22;
 const JUMP_SPEED = 8;
@@ -92,6 +92,7 @@ const SELL_POS = {x:-9, z:0};
 const SHOP_POS = {x:9, z:0};
 const PORTAL_POS = {x:-3, z:12};
 const EGG_POS = {x:3, z:12};
+const REBIRTH_POS = {x:0, z:16};
 
 /* ---------- pets & eggs ---------- */
 const PET_RARITIES = {
@@ -265,6 +266,70 @@ function makeBlock(x,y,z,type){
   blocks.set(k, {mesh, type, health:ORES[type].health});
 }
 
+/* ---------- overlay de grietas: un solo mesh reusado para el bloque apuntado ---------- */
+const CRACK_STAGES = 5;
+function generateCrackTexture(stage, totalStages){
+  const size = 64;
+  const cvs = document.createElement('canvas');
+  cvs.width = size; cvs.height = size;
+  const ctx = cvs.getContext('2d');
+  ctx.clearRect(0,0,size,size);
+  const density = (stage+1) / totalStages;
+  ctx.strokeStyle = 'rgba(8,6,4,' + (0.55 + density*0.35) + ')';
+  ctx.lineWidth = 1.3 + density*1.7;
+  const impacts = 2 + Math.floor(density*3);
+  for(let i=0;i<impacts;i++){
+    let x = rand(size*0.25, size*0.75), y = rand(size*0.25, size*0.75);
+    const branches = 3 + Math.floor(density*5);
+    for(let b=0;b<branches;b++){
+      ctx.beginPath();
+      let bx=x, by=y;
+      ctx.moveTo(bx,by);
+      let angle = Math.random()*Math.PI*2;
+      const segs = 2 + Math.floor(density*3);
+      for(let s=0;s<segs;s++){
+        angle += (Math.random()-0.5)*1.3;
+        bx += Math.cos(angle)*(4+Math.random()*6);
+        by += Math.sin(angle)*(4+Math.random()*6);
+        ctx.lineTo(bx,by);
+      }
+      ctx.stroke();
+    }
+  }
+  const tex = new THREE.CanvasTexture(cvs);
+  return tex;
+}
+const crackTextures = [];
+for(let s=0; s<CRACK_STAGES; s++){ crackTextures.push(generateCrackTexture(s, CRACK_STAGES)); }
+const crackMat = new THREE.MeshBasicMaterial({map:crackTextures[0], transparent:true, depthWrite:false, opacity:0.95});
+const crackOverlay = new THREE.Mesh(new THREE.BoxGeometry(0.975,0.975,0.975), crackMat);
+crackOverlay.visible = false;
+crackOverlay.renderOrder = 5;
+scene.add(crackOverlay);
+
+// se llama cada frame con el bloque apuntado — muestra la grieta que corresponde
+// a cuánta vida le queda, o se esconde si está intacto / fuera de alcance / roca madre
+function updateCrackOverlay(hit){
+  if(hit && hit.distance <= REACH){
+    const entry = blocks.get(hit.key);
+    if(entry && !ORES[entry.type].unbreakable){
+      const maxHealth = ORES[entry.type].health;
+      const frac = Math.max(0, Math.min(1, entry.health/maxHealth));
+      if(frac < 1){
+        const stageIdx = Math.min(CRACK_STAGES-1, Math.floor((1-frac)*CRACK_STAGES));
+        if(crackMat.map !== crackTextures[stageIdx]){
+          crackMat.map = crackTextures[stageIdx];
+          crackMat.needsUpdate = true;
+        }
+        crackOverlay.position.copy(entry.mesh.position);
+        crackOverlay.visible = true;
+        return;
+      }
+    }
+  }
+  crackOverlay.visible = false;
+}
+
 function buildField(){
   const oreOrder = STAGES[state.stage].oreOrder;
   const mineableLayers = FIELD_DEPTH - 1; // la última capa es roca madre, no entra en el sorteo
@@ -398,6 +463,31 @@ function makeTextSprite(text, color){
   return spr;
 }
 
+const sellCoinProps = [];
+function addCanopy(pos, color){
+  const poleMat = new THREE.MeshStandardMaterial({color:0x2a2018, roughness:0.85});
+  const poleGeo = new THREE.CylinderGeometry(0.06,0.08,2.3,6);
+  [[-1.9,-1.9],[1.9,-1.9],[-1.9,1.9],[1.9,1.9]].forEach(([dx,dz])=>{
+    const pole = new THREE.Mesh(poleGeo, poleMat);
+    pole.position.set(pos.x+dx, 1.55, pos.z+dz);
+    scene.add(pole);
+  });
+  const roof = new THREE.Mesh(
+    new THREE.ConeGeometry(3.15, 0.95, 4),
+    new THREE.MeshStandardMaterial({color, roughness:0.55, metalness:0.15, emissive:color, emissiveIntensity:0.12})
+  );
+  roof.rotation.y = Math.PI/4;
+  roof.position.set(pos.x, 3.05, pos.z);
+  scene.add(roof);
+  const roofTrim = new THREE.Mesh(
+    new THREE.TorusGeometry(3.05,0.045,6,4),
+    new THREE.MeshStandardMaterial({color, emissive:color, emissiveIntensity:0.6})
+  );
+  roofTrim.rotation.x = Math.PI/2; roofTrim.rotation.z = Math.PI/4;
+  roofTrim.position.set(pos.x, 2.62, pos.z);
+  scene.add(roofTrim);
+}
+
 function buildStation(pos, color, shapeGeo, label){
   const group = new THREE.Group();
   const platform = new THREE.Mesh(
@@ -427,12 +517,46 @@ function buildStation(pos, color, shapeGeo, label){
   group.add(sign);
 
   scene.add(group);
+  addCanopy(pos, color);
   return icon;
 }
 const sellIcon = buildStation(SELL_POS, 0x3ddc84, new THREE.OctahedronGeometry(0.5), 'VENTA');
 const shopIcon = buildStation(SHOP_POS, 0x6fe7ff, new THREE.IcosahedronGeometry(0.5), 'TIENDA');
 const portalIcon = buildStation(PORTAL_POS, 0xffb14e, new THREE.TorusKnotGeometry(0.32,0.11,64,8), 'PORTAL');
 const eggIcon = buildStation(EGG_POS, 0xff5cf0, new THREE.SphereGeometry(0.5,10,10), 'HUEVOS');
+const rebirthIcon = buildStation(REBIRTH_POS, 0xff5cf0, new THREE.OctahedronGeometry(0.5,1), 'RENACER');
+
+/* ---------- detalle extra: pila de monedas flotando en la Zona de Venta ---------- */
+(function decorateSellStation(){
+  const coinMat = new THREE.MeshStandardMaterial({color:0xffd23f, emissive:0xffd23f, emissiveIntensity:0.35, roughness:0.3, metalness:0.6});
+  for(let i=0;i<6;i++){
+    const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.14,0.035,14), coinMat);
+    const ang = (i/6)*Math.PI*2;
+    coin.position.set(SELL_POS.x + Math.cos(ang)*0.9, 0.85 + (i%3)*0.05, SELL_POS.z + Math.sin(ang)*0.9);
+    coin.rotation.x = Math.PI/2;
+    coin.userData.spin = 0.6 + Math.random()*0.4;
+    scene.add(coin);
+    sellCoinProps.push(coin);
+  }
+})();
+
+/* ---------- detalle extra: picos cruzados de exhibición en la Tienda ---------- */
+(function decorateShopStation(){
+  const woodMat = new THREE.MeshStandardMaterial({color:0x5a3f26, roughness:0.85});
+  const steelMat = new THREE.MeshStandardMaterial({color:0xcfd3d8, roughness:0.3, metalness:0.6});
+  const display = new THREE.Group();
+  [[-0.35,0.5],[0.35,-0.5]].forEach(([tilt,rot])=>{
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.05,1.1,8), woodMat);
+    handle.rotation.z = tilt;
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.07,0.4,6), steelMat);
+    head.position.y = 0.6;
+    head.rotation.z = tilt;
+    display.add(handle, head);
+  });
+  display.position.set(SHOP_POS.x, 1.55, SHOP_POS.z - 2.35);
+  display.rotation.y = Math.PI;
+  scene.add(display);
+})();
 
 /* ---------- decoration: crates & barrels near stations ---------- */
 function makeCrate(x,z, s){
@@ -507,6 +631,9 @@ function makeFencePost(x,z, withLantern){
     } while((Math.abs(x)<FIELD_R+1.5 && Math.abs(z)<FIELD_R+1.5 ||
              Math.hypot(x-SELL_POS.x,z-SELL_POS.z)<3.5 ||
              Math.hypot(x-SHOP_POS.x,z-SHOP_POS.z)<3.5 ||
+             Math.hypot(x-PORTAL_POS.x,z-PORTAL_POS.z)<3.5 ||
+             Math.hypot(x-EGG_POS.x,z-EGG_POS.z)<3.5 ||
+             Math.hypot(x-REBIRTH_POS.x,z-REBIRTH_POS.z)<3.5 ||
              (Math.abs(x)<2 && z>4 && z<10)) && tries<30);
     const s = rand(0.35,0.85);
     const b = new THREE.Mesh(
@@ -625,6 +752,15 @@ function buildPickaxeModel(tier){
   tipR.position.set(0.41, 0.76, 0);
   g.add(tipR);
 
+  if(v.gem){
+    const gem = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.05,0),
+      new THREE.MeshStandardMaterial({color:v.head, emissive:v.head, emissiveIntensity:0.9, roughness:0.1, metalness:0.35})
+    );
+    gem.position.set(0, 0.72, 0.065);
+    g.add(gem);
+  }
+
   g.traverse(o=>{
     if(o.isMesh){
       o.frustumCulled = false;
@@ -635,12 +771,14 @@ function buildPickaxeModel(tier){
   return g;
 }
 
+let currentTierScale = 1;
 function equipPickaxeVisual(){
   if(pickaxeGroup) camera.remove(pickaxeGroup);
   pickaxeGroup = buildPickaxeModel(state.pickaxeTier);
   pickaxeGroup.position.set(basePose.x, basePose.y, basePose.z);
   pickaxeGroup.rotation.set(basePose.rx, basePose.ry, basePose.rz);
   pickaxeGroup.scale.setScalar(0.001);
+  currentTierScale = PICKAXE_VISUALS[state.pickaxeTier].scale;
   camera.add(pickaxeGroup);
   appearProgress = 0;
 }
@@ -669,7 +807,7 @@ function updateViewmodel(dt, now, moving){
   if(appearProgress < 1){
     appearProgress = Math.min(1, appearProgress + dt/0.45);
     const e = 1 - Math.pow(1-appearProgress, 3);
-    pickaxeGroup.scale.setScalar(Math.max(e*VM_SCALE,0.001));
+    pickaxeGroup.scale.setScalar(Math.max(e*VM_SCALE*currentTierScale,0.001));
   }
 }
 
@@ -877,9 +1015,6 @@ function updateTorchFlicker(t){
 const hud = document.getElementById('hud');
 const coinsVal = document.getElementById('coinsVal');
 const multVal = document.getElementById('multVal');
-const rebirthCountEl = document.getElementById('rebirthCount');
-const rebirthFill = document.getElementById('rebirthFill');
-const rebirthBtn = document.getElementById('rebirthBtn');
 const invBarInner = document.getElementById('invBarInner');
 const invText = document.getElementById('invText');
 const invList = document.getElementById('invList');
@@ -893,6 +1028,7 @@ const promptSell = document.getElementById('promptSell');
 const promptShop = document.getElementById('promptShop');
 const promptPortal = document.getElementById('promptPortal');
 const promptEgg = document.getElementById('promptEgg');
+const promptRebirth = document.getElementById('promptRebirth');
 const onlineCountEl = document.getElementById('onlineCount');
 const stageNameEl = document.getElementById('stageName');
 const resetBadge = document.getElementById('resetBadge');
@@ -944,7 +1080,6 @@ function updateTargetPanel(hit){
 function updateHUD(){
   coinsVal.textContent = '$' + fmt(state.coins);
   multVal.textContent = 'x' + state.multiplier;
-  rebirthCountEl.textContent = state.rebirths;
   pickaxeNameEl.textContent = PICKAXES[state.pickaxeTier].name;
   backpackNameEl.textContent = BACKPACKS[state.backpackTier].name;
   stageNameEl.textContent = STAGES[state.stage].name;
@@ -965,12 +1100,6 @@ function updateHUD(){
       invList.appendChild(row);
     }
   });
-
-  const thresh = rebirthThreshold();
-  rebirthFill.style.width = Math.min(100, (state.coins/thresh)*100) + '%';
-  const able = canRebirth();
-  rebirthBtn.disabled = !able;
-  rebirthBtn.textContent = able ? 'Renacer (¡Disponible!)' : ('Renacer ($'+fmt(thresh)+')');
 
   if(shopOpenFlag) renderShop();
   if(petsOpenFlag) renderPets();
@@ -1069,7 +1198,6 @@ document.getElementById('rebirthConfirm').onclick = ()=>{
   toast('¡Renaciste! Multiplicador x'+state.multiplier, '#ff5cf0');
   closeRebirth();
 };
-rebirthBtn.onclick = openRebirth;
 
 /* ---------- stages / portal modal ---------- */
 const stagesModal = document.getElementById('stagesModal');
@@ -1144,7 +1272,9 @@ const eggList = document.getElementById('eggList');
 const petList = document.getElementById('petList');
 const petSlotCount = document.getElementById('petSlotCount');
 
+let hatchAnimating = false;
 function hatchEgg(egg){
+  if(hatchAnimating) return;
   if(state.coins < egg.cost){ toast('No tienes suficientes monedas', '#ff5d5d'); return; }
   state.coins -= egg.cost;
   const rarity = weightedPick(egg.table);
@@ -1156,11 +1286,47 @@ function hatchEgg(egg){
     coinMult: template.coinMult, dpsMult: template.dpsMult, luck: template.luck, cap: template.cap,
   };
   state.pets.push(inst);
-  toast('¡Obtuviste a '+template.name+'! ('+PET_RARITIES[rarity].name+')', hexStr(PET_RARITIES[rarity].color));
   markDirty();
   updateHUD();
-  renderEggs();
-  renderPets();
+  playHatchAnimation(template, rarity);
+}
+
+const hatchReveal = document.getElementById('hatchReveal');
+const hatchEggEmoji = document.getElementById('hatchEggEmoji');
+const hatchGlow = document.getElementById('hatchGlow');
+const hatchResult = document.getElementById('hatchResult');
+const hatchRarity = document.getElementById('hatchRarity');
+const hatchName = document.getElementById('hatchName');
+
+function playHatchAnimation(template, rarity){
+  hatchAnimating = true;
+  renderEggs(); // refresca para deshabilitar los botones mientras se reproduce
+
+  const info = PET_RARITIES[rarity];
+  hatchEggEmoji.className = 'hatch-egg';
+  hatchEggEmoji.textContent = '🥚';
+  hatchGlow.className = 'hatch-glow';
+  hatchGlow.style.background = 'radial-gradient(circle, '+hexStr(info.color)+' 0%, transparent 72%)';
+  hatchResult.className = 'hatch-result';
+  hatchRarity.textContent = info.name;
+  hatchRarity.style.color = hexStr(info.color);
+  hatchName.textContent = template.name;
+  hatchReveal.classList.remove('hidden');
+
+  setTimeout(()=>{
+    hatchEggEmoji.classList.add('cracking');
+    hatchGlow.classList.add('show');
+  }, 850);
+  setTimeout(()=>{
+    hatchResult.classList.add('show');
+    toast('¡Obtuviste a '+template.name+'! ('+info.name+')', hexStr(info.color));
+  }, 1150);
+  setTimeout(()=>{
+    hatchReveal.classList.add('hidden');
+    hatchAnimating = false;
+    renderEggs();
+    renderPets();
+  }, 3000);
 }
 
 function togglePetEquip(uid){
@@ -1189,7 +1355,7 @@ function renderEggs(){
     row.innerHTML = '<div class="shop-row-main"><b>'+egg.name+'</b><span>$'+fmt(egg.cost)+'</span></div>';
     const btn = document.createElement('button');
     btn.textContent = 'Abrir';
-    btn.disabled = state.coins < egg.cost;
+    btn.disabled = state.coins < egg.cost || hatchAnimating;
     btn.onclick = ()=> hatchEgg(egg);
     row.appendChild(btn);
     eggList.appendChild(row);
@@ -1235,6 +1401,8 @@ function openPets(){
 }
 function closePets(){
   petsModal.classList.add('hidden');
+  hatchReveal.classList.add('hidden');
+  hatchAnimating = false;
   petsOpenFlag = false;
   isPaused = false;
   requestLook();
@@ -1710,7 +1878,7 @@ window.addEventListener('mousemove', (e)=>{
   pitch = Math.max(-Math.PI/2+0.05, Math.min(Math.PI/2-0.05, pitch));
 });
 
-let nearSell = false, nearShop = false, nearPortal = false, nearEgg = false;
+let nearSell = false, nearShop = false, nearPortal = false, nearEgg = false, nearRebirth = false;
 window.addEventListener('keydown', (e)=>{
   const k = e.key.toLowerCase();
   if(k==='w') keysState.w=true;
@@ -1724,6 +1892,7 @@ window.addEventListener('keydown', (e)=>{
     else if(nearShop) openShop();
     else if(nearPortal) openStages();
     else if(nearEgg) openPets();
+    else if(nearRebirth) openRebirth();
   }
   if(k==='r' && !e.repeat && gameStarted && !isPaused){
     player.x = SELL_POS.x; player.y = 6; player.z = SELL_POS.z; vel.y = 0;
@@ -1751,14 +1920,25 @@ function updateProximity(){
   const dShop = Math.hypot(player.x-SHOP_POS.x, player.z-SHOP_POS.z);
   const dPortal = Math.hypot(player.x-PORTAL_POS.x, player.z-PORTAL_POS.z);
   const dEgg = Math.hypot(player.x-EGG_POS.x, player.z-EGG_POS.z);
+  const dRebirth = Math.hypot(player.x-REBIRTH_POS.x, player.z-REBIRTH_POS.z);
   nearSell = dSell < 3;
   nearShop = dShop < 3;
   nearPortal = dPortal < 3;
   nearEgg = dEgg < 3;
+  nearRebirth = dRebirth < 3;
   promptSell.style.display = nearSell ? 'block' : 'none';
   promptShop.style.display = (!nearSell && nearShop) ? 'block' : 'none';
   promptPortal.style.display = (!nearSell && !nearShop && nearPortal) ? 'block' : 'none';
   promptEgg.style.display = (!nearSell && !nearShop && !nearPortal && nearEgg) ? 'block' : 'none';
+  if(!nearSell && !nearShop && !nearPortal && !nearEgg && nearRebirth){
+    promptRebirth.style.display = 'block';
+    const thresh = rebirthThreshold();
+    promptRebirth.innerHTML = canRebirth()
+      ? '<kbd>E</kbd>¡Renacer disponible!'
+      : '<kbd>E</kbd>Renacer ($'+fmt(state.coins)+' / $'+fmt(thresh)+')';
+  } else {
+    promptRebirth.style.display = 'none';
+  }
 }
 
 /* ======================= MAIN LOOP ======================= */
@@ -1783,12 +1963,14 @@ function animate(now){
       crosshair.classList.remove('active');
     }
     updateTargetPanel(hit);
+    updateCrackOverlay(hit);
 
     updateParticles(dt);
     updateProximity();
   } else {
     isMining = false;
     targetInfo.classList.remove('show');
+    crackOverlay.visible = false;
   }
 
   const moving = keysState.w||keysState.a||keysState.s||keysState.d;
@@ -1803,6 +1985,13 @@ function animate(now){
   portalIcon.position.y = 1.9 + Math.sin(t*1.4+3)*0.08;
   eggIcon.rotation.y += dt*0.8;
   eggIcon.position.y = 1.9 + Math.sin(t*1.4+4.5)*0.08;
+  rebirthIcon.rotation.y += dt*0.9;
+  rebirthIcon.rotation.x += dt*0.5;
+  rebirthIcon.position.y = 1.9 + Math.sin(t*1.4+6)*0.1;
+  sellCoinProps.forEach((coin,i)=>{
+    coin.rotation.y += dt*coin.userData.spin;
+    coin.position.y = 0.85 + Math.sin(t*1.8 + i)*0.06;
+  });
 
   updateGlow(t);
   updateTorchFlicker(t);

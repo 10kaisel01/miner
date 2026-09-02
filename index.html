@@ -23,12 +23,6 @@
   <div id="stageBadge" class="panel">🗺️ <span id="stageName">Mina Inicial</span></div>
   <div id="resetBadge" class="panel">⏳ <span id="resetCountdown">30:00</span></div>
 
-  <div id="rebirthBar" class="panel">
-    <div class="label">RENACER · <span id="rebirthCount">0</span> veces</div>
-    <div id="rebirthTrack"><div id="rebirthFill"></div></div>
-    <button id="rebirthBtn">Renacer</button>
-  </div>
-
   <div id="invPanel" class="panel">
     <h3>MOCHILA <span class="mono" id="invText">0/40</span></h3>
     <div id="invBarWrap"><div id="invBarInner"></div></div>
@@ -47,6 +41,7 @@
   <div id="promptShop" class="prompt panel"><kbd>E</kbd>Abrir tienda</div>
   <div id="promptPortal" class="prompt panel"><kbd>E</kbd>Ver etapas y ranking</div>
   <div id="promptEgg" class="prompt panel"><kbd>E</kbd>Huevos y mascotas</div>
+  <div id="promptRebirth" class="prompt panel"><kbd>E</kbd>Renacer</div>
 
   <div id="toastContainer"></div>
 
@@ -74,7 +69,7 @@
       <li>Ve a la <b style="color:var(--cyan)">Tienda</b> y presiona <kbd>E</kbd> para mejorar tu pico y mochila</li>
       <li>Ve al <b style="color:var(--amber)">Portal</b> para viajar entre etapas y ver el ranking</li>
       <li>Ve a los <b style="color:var(--pink)">Huevos</b> para conseguir mascotas (equipá hasta 3)</li>
-      <li>Junta suficientes monedas y <b style="color:var(--pink)">Renace</b> para un multiplicador permanente</li>
+      <li>Junta suficientes monedas y andá a la estación de <b style="color:var(--pink)">Renacer</b> para un multiplicador permanente</li>
       <li>¿Se te llenó la mochila? Presioná <kbd>R</kbd> para subir directo a la Zona de Venta</li>
     </ul>
     <div class="nameField">
@@ -160,6 +155,14 @@
       <div class="shopCol">
         <h3>Tus mascotas <span class="mono" id="petSlotCount" style="color:var(--text-dim);font-size:11px;">(0/3 equipadas)</span></h3>
         <div id="petList"></div>
+      </div>
+    </div>
+    <div id="hatchReveal" class="hidden">
+      <div class="hatch-glow" id="hatchGlow"></div>
+      <div class="hatch-egg" id="hatchEggEmoji">🥚</div>
+      <div class="hatch-result" id="hatchResult">
+        <div class="rar" id="hatchRarity">Rareza</div>
+        <div class="nm" id="hatchName">Nombre</div>
       </div>
     </div>
   </div>
