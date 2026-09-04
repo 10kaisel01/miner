@@ -2,9 +2,12 @@
 "use strict";
 
 /* ======================= DATA ======================= */
-// hardness: nivel mínimo de pico necesario para poder picarlo (0=Madera .. 8=del Vacío).
+// hardness: nivel mínimo de pico necesario para poder picarlo (0=Madera .. 11=del Vacío Eterno).
 // Si tu pico actual tiene un maxHardness menor a la dureza del mineral, no le hacés nada.
+// Cada mundo tiene su propio set de 15 minerales, sin reusar nombres entre mundos
+// (salvo Roca Madre, que es universal e indestructible en las 4 etapas).
 const ORES = {
+  // --- Mina Inicial ---
   stone:    {name:'Piedra',      color:0x8a8a86, health:1,   value:1,    glow:false, hardness:0},
   coal:     {name:'Carbón',      color:0x2b2b2e, health:2,   value:3,    glow:false, hardness:0},
   copper:   {name:'Cobre',       color:0xc97a4a, health:3,   value:7,    glow:false, hardness:0},
@@ -22,7 +25,7 @@ const ORES = {
   voidstone:{name:'Piedra Vacía',color:0x6a1fb8, health:65,  value:4200, glow:true,  hardness:5},
   bedrock:  {name:'Roca Madre',  color:0x14100e, health:Infinity, value:0, glow:false, hardness:99, unbreakable:true},
 
-  // --- Mundo de Caramelos: set de "minerales" completamente distinto ---
+  // --- Mundo de Caramelos: set completamente distinto (hardness 1-7, requiere pico de Caramelo/Bombón Real) ---
   sugar:         {name:'Azúcar',            color:0xfff5e0, health:1,  value:1,    glow:false, hardness:1},
   marshmallow:   {name:'Malvavisco',        color:0xffe3ec, health:2,  value:3,    glow:false, hardness:1},
   gum:           {name:'Chicle',            color:0xff6fb0, health:3,  value:7,    glow:false, hardness:1},
@@ -37,25 +40,57 @@ const ORES = {
   goldbonbon:    {name:'Bombón de Oro',     color:0xf5c518, health:26, value:340,  glow:true,  hardness:5},
   macaron:       {name:'Macaron',           color:0xd9a8ff, health:30, value:450,  glow:true,  hardness:5},
   sugardiamond:  {name:'Diamante de Azúcar',color:0xb3f0ff, health:50, value:2500, glow:true,  hardness:6},
-  candycrystal:  {name:'Cristal de Caramelo',color:0xff3df0,health:65, value:4200, glow:true,  hardness:6},
+  candycrystal:  {name:'Cristal de Caramelo',color:0xff3df0,health:65, value:4200, glow:true,  hardness:7},
 
-  // --- capstones exclusivos de Volcán y Abismo (dan sentido a los picos tier 7/8) ---
-  magmacore: {name:'Núcleo de Magma', color:0xff5d3d, health:80,  value:7000,  glow:true, hardness:7},
-  starcore:  {name:'Núcleo Estelar',  color:0xfff2c0, health:100, value:12000, glow:true, hardness:8},
+  // --- Volcán: set exclusivo temático de lava/obsidiana (hardness 3-9, requiere pico de Obsidiana/Magma Ardiente) ---
+  cinder:        {name:'Ceniza',              color:0x4a3428, health:1,  value:3,    glow:false, hardness:3},
+  sulfur:        {name:'Azufre',              color:0xd4c24a, health:2,  value:8,    glow:false, hardness:3},
+  slag:          {name:'Escoria',             color:0x6b4a3a, health:3,  value:18,   glow:false, hardness:4},
+  basalt:        {name:'Basalto',             color:0x2e2622, health:5,  value:35,   glow:false, hardness:4},
+  obsidianshard: {name:'Esquirla de Obsidiana',color:0x3a2a3a,health:6,  value:55,   glow:false, hardness:5},
+  brimstone:     {name:'Piedra de Fuego',     color:0xc94a2e, health:8,  value:90,   glow:false, hardness:5},
+  magnetite:     {name:'Magnetita',           color:0x8a6a3a, health:10, value:140,  glow:false, hardness:6},
+  pyrite:        {name:'Pirita Ígnea',        color:0xd9903a, health:13, value:220,  glow:true,  hardness:6},
+  moltenglass:   {name:'Vidrio Fundido',      color:0xff8c3d, health:16, value:320,  glow:true,  hardness:6},
+  emberopal:     {name:'Ópalo de Ascua',      color:0xffb066, health:18, value:480,  glow:true,  hardness:7},
+  infernite:     {name:'Infernita',           color:0xff6a3d, health:22, value:650,  glow:true,  hardness:7},
+  dragonglass:   {name:'Vidrio de Dragón',    color:0x8a3aff, health:26, value:900,  glow:true,  hardness:8},
+  lavagem:       {name:'Gema de Lava',        color:0xff3d5c, health:30, value:1300, glow:true,  hardness:8},
+  phoenixash:    {name:'Ceniza de Fénix',     color:0xffe0a0, health:50, value:6000, glow:true,  hardness:9},
+  magmacore:     {name:'Núcleo de Magma',     color:0xff5d3d, health:65, value:9500, glow:true,  hardness:9},
+
+  // --- Abismo Místico: set exclusivo temático cósmico/espectral (hardness 5-11, requiere pico del Abismo/Vacío Eterno) ---
+  shadowdust:    {name:'Polvo de Sombra',       color:0x2a2038, health:1,  value:6,     glow:false, hardness:5},
+  moonstone:     {name:'Piedra Lunar',          color:0xc8c8e8, health:2,  value:15,    glow:false, hardness:5},
+  nebulite:      {name:'Nebulita',              color:0x6a4fd8, health:3,  value:30,    glow:false, hardness:6},
+  wraithglass:   {name:'Vidrio Espectral',      color:0x8ab8ff, health:5,  value:60,    glow:false, hardness:6},
+  duskcrystal:   {name:'Cristal del Ocaso',     color:0x5a3a7a, health:6,  value:100,   glow:false, hardness:6},
+  starshard:     {name:'Fragmento Estelar',     color:0xffe066, health:8,  value:160,   glow:false, hardness:7},
+  gravitite:     {name:'Gravitita',             color:0x9a9aff, health:10, value:260,   glow:false, hardness:7},
+  echostone:     {name:'Piedra del Eco',        color:0xc8a0ff, health:13, value:400,   glow:true,  hardness:7},
+  abyssalpearl:  {name:'Perla Abisal',          color:0xe8d8ff, health:16, value:600,   glow:true,  hardness:8},
+  voidglass:     {name:'Vidrio del Vacío',      color:0x4fd8ff, health:18, value:900,   glow:true,  hardness:8},
+  eclipsegem:    {name:'Gema del Eclipse',      color:0xff5cf0, health:22, value:1300,  glow:true,  hardness:9},
+  phantomcore:   {name:'Núcleo Fantasma',       color:0x2a0a3a, health:26, value:1900,  glow:true,  hardness:9},
+  celestium:     {name:'Celestio',              color:0x6affea, health:30, value:2800,  glow:true,  hardness:10},
+  oblivionshard: {name:'Fragmento del Olvido',  color:0x1a0620, health:50, value:12000, glow:true,  hardness:11},
+  starcore:      {name:'Núcleo Estelar',        color:0xfff2c0, health:65, value:20000, glow:true,  hardness:11},
 };
 
 // listas ordenadas de mineral más superficial a más profundo, una por etapa.
 // La profundidad "ideal" de cada mineral es su posición en esta lista.
 const BASE_ORE_ORDER    = ['stone','coal','copper','iron','silver','gold','platinum','ruby','sapphire','amethyst','emerald','opal','diamond','mythic','voidstone'];
 const CANDY_ORE_ORDER   = ['sugar','marshmallow','gum','caramel','cookie','chocolate','cottoncandy','lollipop','gummy','truffle','strawberrycake','goldbonbon','macaron','sugardiamond','candycrystal'];
-const VOLCANO_ORE_ORDER = ['stone','coal','copper','ruby','iron','platinum','gold','amethyst','opal','emerald','diamond','mythic','voidstone','voidstone','magmacore'];
-const ABYSS_ORE_ORDER   = ['stone','iron','emerald','silver','opal','amethyst','sapphire','platinum','ruby','diamond','gold','mythic','voidstone','voidstone','starcore'];
+const VOLCANO_ORE_ORDER = ['cinder','sulfur','slag','basalt','obsidianshard','brimstone','magnetite','pyrite','moltenglass','emberopal','infernite','dragonglass','lavagem','phoenixash','magmacore'];
+const ABYSS_ORE_ORDER   = ['shadowdust','moonstone','nebulite','wraithglass','duskcrystal','starshard','gravitite','echostone','abyssalpearl','voidglass','eclipsegem','phantomcore','celestium','oblivionshard','starcore'];
 
 const STAGES = [
   {name:'Mina Inicial',    unlockRebirths:0, valueMult:1,   ground:0x453a30, torch:0xffb14e, sky:['#141022','#0c0a10','#050405'], oreOrder:BASE_ORE_ORDER,
     fog:0x0c0a10, fogDensity:0.032, ambient:0x2a2030, ambientIntensity:0.55, hemiSky:0x3a3a52, hemiGround:0x1c140c, hemiIntensity:0.85},
-  {name:'Mundo de Caramelos',unlockRebirths:1, valueMult:1.6, ground:0xffb8dd, torch:0xff6fd8, sky:['#ffd9f0','#ffb8e0','#ff8fd0'], oreOrder:CANDY_ORE_ORDER,
-    fog:0xffc9e6, fogDensity:0.02, ambient:0xffe0f0, ambientIntensity:0.9, hemiSky:0xfff0f8, hemiGround:0xffb3d9, hemiIntensity:1.1},
+  // Brillo bajado a propósito (antes: ambient .9 / hemi 1.1 / niebla muy clara) para que no
+  // encandile ni se vea lavado, manteniendo la identidad pastel-cálida del mundo.
+  {name:'Mundo de Caramelos',unlockRebirths:1, valueMult:1.6, ground:0xf2a8cf, torch:0xff6fd8, sky:['#f0c0e0','#dd9fcf','#c47fbd'], oreOrder:CANDY_ORE_ORDER,
+    fog:0xe8a8cf, fogDensity:0.028, ambient:0xf0bcdd, ambientIntensity:0.6, hemiSky:0xffe0f0, hemiGround:0xe38fbf, hemiIntensity:0.72},
   {name:'Volcán',          unlockRebirths:3, valueMult:2.6, ground:0x4a2418, torch:0xff5d3d, sky:['#2a0e0a','#1a0806','#0a0403'], oreOrder:VOLCANO_ORE_ORDER,
     fog:0x1a0806, fogDensity:0.04, ambient:0x4a1c10, ambientIntensity:0.6, hemiSky:0x662a1a, hemiGround:0x1a0806, hemiIntensity:0.9},
   {name:'Abismo Místico',  unlockRebirths:6, valueMult:4.5, ground:0x3a2c4a, torch:0xff5cf0, sky:['#1c0e2a','#120a1c','#06040a'], oreOrder:ABYSS_ORE_ORDER,
@@ -79,16 +114,21 @@ function pickOreForDepth(oreOrder, layerIndex, mineableLayers){
   return weightedPick(oreWeightsForDepth(oreOrder, depthFrac));
 }
 
+// Cada mundo (a partir de Caramelos) aporta DOS niveles propios de pico y mochila,
+// temáticos y correlativos a su propio set de minerales (ver ORES / *_ORE_ORDER arriba).
 const PICKAXES = [
-  {name:'Pico de Madera',   dps:1.2, cost:0,       maxHardness:0, unlockStage:0},
-  {name:'Pico de Piedra',   dps:2.2, cost:300,     maxHardness:1, unlockStage:0},
-  {name:'Pico de Hierro',   dps:4,   cost:1500,    maxHardness:2, unlockStage:0},
-  {name:'Pico de Oro',      dps:7,   cost:6000,    maxHardness:3, unlockStage:0},
-  {name:'Pico de Diamante', dps:12,  cost:25000,   maxHardness:4, unlockStage:0},
-  {name:'Pico Mítico',      dps:22,  cost:120000,  maxHardness:5, unlockStage:0},
-  {name:'Pico de Caramelo', dps:38,  cost:400000,  maxHardness:6, unlockStage:1},
-  {name:'Pico de Magma',    dps:60,  cost:900000,  maxHardness:7, unlockStage:2},
-  {name:'Pico del Vacío',   dps:95,  cost:2000000, maxHardness:8, unlockStage:3},
+  {name:'Pico de Madera',           dps:1.2, cost:0,        maxHardness:0,  unlockStage:0},
+  {name:'Pico de Piedra',           dps:2.2, cost:300,      maxHardness:1,  unlockStage:0},
+  {name:'Pico de Hierro',           dps:4,   cost:1500,     maxHardness:2,  unlockStage:0},
+  {name:'Pico de Oro',              dps:7,   cost:6000,     maxHardness:3,  unlockStage:0},
+  {name:'Pico de Diamante',         dps:12,  cost:25000,    maxHardness:4,  unlockStage:0},
+  {name:'Pico Mítico',              dps:22,  cost:120000,   maxHardness:5,  unlockStage:0},
+  {name:'Pico de Algodón de Azúcar',dps:38,  cost:400000,   maxHardness:6,  unlockStage:1},
+  {name:'Pico de Bombón Real',      dps:55,  cost:850000,   maxHardness:7,  unlockStage:1},
+  {name:'Pico de Obsidiana',        dps:80,  cost:1800000,  maxHardness:8,  unlockStage:2},
+  {name:'Pico de Magma Ardiente',   dps:115, cost:3800000,  maxHardness:9,  unlockStage:2},
+  {name:'Pico del Abismo',          dps:165, cost:8000000,  maxHardness:10, unlockStage:3},
+  {name:'Pico del Vacío Eterno',    dps:230, cost:17000000, maxHardness:11, unlockStage:3},
 ];
 const PICKAXE_VISUALS = [
   {handle:0x6b4a2b, head:0x9a958c, emissive:false, scale:0.85, gem:false},
@@ -98,19 +138,25 @@ const PICKAXE_VISUALS = [
   {handle:0x3a2a1a, head:0x7df9ff, emissive:true,  scale:1.14, gem:true},
   {handle:0x2a1a2a, head:0xff5cf0, emissive:true,  scale:1.22, gem:true},
   {handle:0xff6fb0, head:0xffb3e6, emissive:true,  scale:1.28, gem:true},
-  {handle:0x2a1810, head:0xff5d3d, emissive:true,  scale:1.34, gem:true},
-  {handle:0x1a0e2a, head:0x6a1fb8, emissive:true,  scale:1.42, gem:true},
+  {handle:0xffe066, head:0xfff0fa, emissive:true,  scale:1.33, gem:true},
+  {handle:0x1a1008, head:0x3a2a3a, emissive:true,  scale:1.38, gem:true},
+  {handle:0x2a1810, head:0xff5d3d, emissive:true,  scale:1.44, gem:true},
+  {handle:0x1a0e2a, head:0x8a4fd8, emissive:true,  scale:1.51, gem:true},
+  {handle:0x0a0614, head:0x6a1fb8, emissive:true,  scale:1.60, gem:true},
 ];
 const BACKPACKS = [
-  {name:'Saco Básico',        cap:40,    cost:0,       unlockStage:0},
-  {name:'Mochila de Cuero',   cap:80,    cost:500,     unlockStage:0},
-  {name:'Marco de Hierro',    cap:150,   cost:2500,    unlockStage:0},
-  {name:'Mochila Dorada',     cap:300,   cost:10000,   unlockStage:0},
-  {name:'Contenedor Diamante',cap:700,   cost:40000,   unlockStage:0},
-  {name:'Bóveda Mítica',      cap:2000,  cost:150000,  unlockStage:0},
-  {name:'Mochila de Caramelo',cap:3500,  cost:400000,  unlockStage:1},
-  {name:'Mochila de Magma',   cap:6000,  cost:900000,  unlockStage:2},
-  {name:'Mochila del Vacío',  cap:10000, cost:2000000, unlockStage:3},
+  {name:'Saco Básico',              cap:40,    cost:0,       unlockStage:0},
+  {name:'Mochila de Cuero',         cap:80,    cost:500,     unlockStage:0},
+  {name:'Marco de Hierro',          cap:150,   cost:2500,    unlockStage:0},
+  {name:'Mochila Dorada',           cap:300,   cost:10000,   unlockStage:0},
+  {name:'Contenedor Diamante',      cap:700,   cost:40000,   unlockStage:0},
+  {name:'Bóveda Mítica',            cap:2000,  cost:150000,  unlockStage:0},
+  {name:'Mochila de Caramelo',      cap:3500,  cost:400000,  unlockStage:1},
+  {name:'Mochila de Bombón Real',   cap:5500,  cost:850000,  unlockStage:1},
+  {name:'Mochila de Obsidiana',     cap:9000,  cost:1800000, unlockStage:2},
+  {name:'Mochila Ígnea',            cap:14000, cost:3800000, unlockStage:2},
+  {name:'Mochila del Abismo',       cap:22000, cost:8000000, unlockStage:3},
+  {name:'Mochila del Vacío Eterno', cap:35000, cost:17000000,unlockStage:3},
 ];
 
 const FIELD_R = 5;
@@ -159,7 +205,9 @@ const EGGS = [
     table:[['epic',30],['legendary',45],['mythic',25]]},
   {id:'candy',  name:'Huevo de Caramelo', cost:200000, unlockStage:1,
     table:[['rare',20],['epic',40],['legendary',30],['mythic',10]]},
-  {id:'void',   name:'Huevo del Vacío', cost:1000000, unlockStage:3,
+  {id:'volcano',name:'Huevo Ígneo', cost:450000, unlockStage:2,
+    table:[['rare',15],['epic',35],['legendary',35],['mythic',15]]},
+  {id:'void',   name:'Huevo del Abismo', cost:1000000, unlockStage:3,
     table:[['epic',10],['legendary',35],['mythic',55]]},
 ];
 const MAX_EQUIPPED_PETS = 3;
@@ -2069,9 +2117,18 @@ function releaseLook(){
 document.addEventListener('pointerlockchange', ()=>{
   pointerLocked = (document.pointerLockElement === canvas);
 });
+let pointerLockWarned = false;
 document.addEventListener('pointerlockerror', ()=>{
   pointerLockSupported = false;
   console.warn('[MINA3D] Pointer Lock no disponible en este entorno, uso rotación libre sin bloqueo de cursor.');
+  // Aviso visible una sola vez: esto pasa siempre dentro de un iframe con sandbox
+  // que no otorga el permiso "pointer-lock" (p.ej. la vista previa embebida de
+  // claude.ai) — no es un bug del juego. Hosteado como página normal (GitHub
+  // Pages, etc.) el navegador sí concede el permiso y esto no aparece.
+  if(!pointerLockWarned && gameStarted){
+    pointerLockWarned = true;
+    toast('🖱️ Cursor libre (sin captura) — normal en esta vista previa', '#ffb14e');
+  }
 });
 // reintenta cada pocos segundos si no está bloqueado (en algunos equipos, ej.
 // Chromebooks, el primer intento puede fallar por timing y funcionar después)
