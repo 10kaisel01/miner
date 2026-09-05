@@ -38,26 +38,55 @@
   #coinsPanel .val{font-size:22px;font-weight:800;color:var(--gold);text-shadow:0 0 10px rgba(255,210,63,.4);}
   #coinsPanel .mult{font-size:12px;color:var(--pink);margin-left:4px;}
 
+  #tokensPanel{
+    position:absolute;top:64px;left:16px;padding:5px 14px;display:flex;align-items:center;gap:8px;
+  }
+  #tokensPanel .icon{font-size:15px;}
+  #tokensPanel .val{font-size:14px;font-weight:700;color:var(--pink);}
+
+  #gemsPanel{
+    position:absolute;top:64px;left:140px;padding:5px 14px;display:flex;align-items:center;gap:8px;
+  }
+  #gemsPanel .icon{font-size:15px;}
+  #gemsPanel .val{font-size:14px;font-weight:700;color:var(--cyan);}
+
+  #titleBadge{
+    position:absolute;top:172px;left:16px;padding:5px 12px;font-size:11.5px;color:var(--gold);
+    white-space:nowrap;
+  }
+
   #onlineBadge{
-    position:absolute;top:70px;left:16px;padding:5px 12px;font-size:12px;color:var(--emerald);
+    position:absolute;top:100px;left:16px;padding:5px 12px;font-size:12px;color:var(--emerald);
     display:flex;align-items:center;gap:6px;
   }
   #stageBadge{
-    position:absolute;top:70px;left:120px;padding:5px 12px;font-size:12px;color:var(--amber);
+    position:absolute;top:100px;left:120px;padding:5px 12px;font-size:12px;color:var(--amber);
     display:flex;align-items:center;gap:6px;white-space:nowrap;
   }
   #resetBadge{
-    position:absolute;top:70px;left:280px;padding:5px 12px;font-size:12px;color:var(--cyan);
+    position:absolute;top:100px;left:280px;padding:5px 12px;font-size:12px;color:var(--cyan);
     display:flex;align-items:center;gap:6px;font-family:'JetBrains Mono';white-space:nowrap;
   }
   #resetBadge.warn{color:var(--red);}
   #netStatusBadge{
-    position:absolute;top:106px;left:16px;padding:5px 12px;font-size:11.5px;
+    position:absolute;top:136px;left:16px;padding:5px 12px;font-size:11.5px;
     white-space:nowrap;color:var(--text-dim);
   }
   #netStatusBadge.net-ok{color:var(--emerald);}
   #netStatusBadge.net-mid{color:var(--amber);}
   #netStatusBadge.net-off{color:var(--red);}
+
+  #questPanel{
+    position:absolute;bottom:64px;left:16px;width:230px;padding:10px 14px;
+  }
+  #questPanel h3{margin:0 0 8px;font-size:12px;color:var(--emerald);letter-spacing:.5px;}
+  #questList{display:flex;flex-direction:column;gap:8px;}
+  .quest-row{font-size:11.5px;color:var(--text-dim);}
+  .quest-row.done{color:var(--emerald);}
+  .quest-label{display:flex;justify-content:space-between;gap:6px;margin-bottom:3px;}
+  .quest-bar-wrap{width:100%;height:6px;border-radius:5px;background:#1a130e;overflow:hidden;border:1px solid var(--border);}
+  .quest-bar-inner{height:100%;background:linear-gradient(90deg,var(--emerald),var(--cyan));width:0%;transition:width .2s;}
+  .quest-row.done .quest-bar-inner{background:var(--gold);}
 
   #invPanel{
     position:absolute;top:16px;right:16px;width:210px;padding:12px 14px;
@@ -157,7 +186,7 @@
 
   /* shop modal */
   #shopModal, #rebirthModal{z-index:40;}
-  .modalBox{width:min(720px,92vw);max-height:82vh;display:flex;flex-direction:column;padding:0;overflow:hidden;position:relative;}
+  .modalBox{width:min(720px,92vw);max-height:82vh;display:flex;flex-direction:column;padding:0;overflow-y:auto;overflow-x:hidden;position:relative;}
 
   /* animación de apertura de huevos */
   #hatchReveal{
@@ -192,7 +221,7 @@
   @keyframes hatchPop{ to{opacity:1;transform:scale(1) translateY(0);} }
   .hatch-result .rar{font-size:12px;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:6px;}
   .hatch-result .nm{font-size:30px;font-weight:800;color:var(--text);text-shadow:0 0 18px rgba(255,255,255,.25);}
-  .modalHead{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:2px solid var(--border);gap:10px;}
+  .modalHead{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:2px solid var(--border);gap:10px;position:sticky;top:0;background:linear-gradient(180deg,var(--panel-2),var(--panel));z-index:2;}
   .modalHead h2{margin:0;font-size:22px;color:var(--amber);}
   .modalHead .coins{font-family:'JetBrains Mono';color:var(--gold);font-weight:700;}
   .closeX{pointer-events:auto;cursor:pointer;background:none;border:2px solid var(--border);color:var(--text-dim);
@@ -216,12 +245,31 @@
   .shop-row button:disabled{opacity:.4;cursor:not-allowed;border-color:var(--border);color:var(--text-dim);}
   .shop-row.locked{opacity:.55;}
   .shop-row.equipped{border-color:var(--gold);}
+  .shop-row.golden{box-shadow:0 0 0 1px rgba(255,224,102,.5) inset, 0 0 14px rgba(255,224,102,.25);}
   .rarity-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:6px;box-shadow:0 0 6px currentColor;}
+  .pet-xp-wrap{width:100%;height:5px;border-radius:4px;background:#1a130e;overflow:hidden;border:1px solid var(--border);margin-top:5px;}
+  .pet-xp-inner{height:100%;background:linear-gradient(90deg,var(--cyan),var(--pink));width:0%;transition:width .2s;}
   .rank-row{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:9px;background:rgba(0,0,0,.2);margin-bottom:6px;font-size:13px;}
   .rank-row .pos{width:20px;color:var(--text-dim);font-family:'JetBrains Mono';font-weight:700;}
   .rank-row .who{flex:1;color:var(--text);}
   .rank-row .amt{font-family:'JetBrains Mono';color:var(--gold);font-weight:700;}
   .rank-row.me{border:1px solid var(--gold);}
+  .codeRow{display:flex;gap:8px;}
+  .codeRow input{
+    flex:1;font-family:'JetBrains Mono';font-size:13px;color:var(--text);letter-spacing:1px;text-transform:uppercase;
+    background:rgba(0,0,0,.35);border:2px solid var(--border);border-radius:10px;padding:9px 12px;outline:none;
+  }
+  .codeRow input:focus{border-color:var(--gold);}
+  .codeRow button{
+    pointer-events:auto;cursor:pointer;font-family:'JetBrains Mono';font-weight:700;font-size:12px;
+    padding:9px 16px;border-radius:10px;border:1.5px solid var(--emerald);background:rgba(61,220,132,.1);color:var(--emerald);white-space:nowrap;
+  }
+  .ach-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;background:rgba(0,0,0,.2);margin-bottom:6px;font-size:12.5px;}
+  .ach-row.done{border:1px solid var(--gold);}
+  .ach-row .ach-icon{font-size:16px;flex-shrink:0;}
+  .ach-row .ach-main{flex:1;display:flex;flex-direction:column;}
+  .ach-row .ach-reward{font-family:'JetBrains Mono';font-size:11px;color:var(--text-dim);}
+  .ach-row.done .ach-reward{color:var(--gold);}
 
   #rebirthModal .box{width:min(460px,90vw);padding:28px 30px;text-align:center;}
   #rebirthModal h2{color:var(--pink);margin-top:0;}

@@ -212,6 +212,18 @@ const EGGS = [
 ];
 const MAX_EQUIPPED_PETS = 3;
 
+// --- Tienda de Renacimiento: se paga con Tokens de Renacimiento (no con monedas) ---
+// Los tokens se ganan al renacer (según qué tan lejos hayas llegado) y NUNCA se pierden.
+// El equipo comprado acá tampoco se resetea al renacer (a diferencia del pico/mochila normales).
+const TOKEN_EGGS = [
+  {id:'tk_legendary', name:'Huevo Legendario', cost:8,  table:[['epic',20],['legendary',60],['mythic',20]]},
+  {id:'tk_mythic',    name:'Huevo Mítico Real', cost:25, table:[['legendary',30],['mythic',70]]},
+];
+const REBIRTH_GEAR = {
+  pickaxe:  {name:'Pico de la Corona',  cost:15, desc:'+20% de daño permanente, no se pierde al renacer'},
+  backpack: {name:'Bóveda de la Corona',cost:15, desc:'+2.000 de capacidad permanente, no se pierde al renacer'},
+};
+
 function key(x,y,z){ return x+','+y+','+z; }
 function weightedPick(list){
   const total = list.reduce((s,e)=>s+e[1],0);
@@ -226,31 +238,210 @@ function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
 
 /* ======================= STATE ======================= */
 const state = {
-  coins:0, rebirths:0, multiplier:1,
+  coins:0, rebirths:0, multiplier:1, tokens:0, gems:0, gemUpgrades:0,
   pickaxeTier:0, backpackTier:0,
+  rebirthPickaxe:false, rebirthBackpack:false, // gear del renacimiento: comprado con tokens, NO se pierde al renacer
+  aoeMining:false, // perk permanente comprado con gemas
   inventory:{},
   stage:0,
-  pets:[],          // {uid,id,name,rarity,coinMult,dpsMult,luck,cap}
+  pets:[],          // {uid,id,name,rarity,coinMult,dpsMult,luck,cap,level,xp,golden}
   equippedPets:[],  // array of uid, max MAX_EQUIPPED_PETS
+  quests:null,      // {dayKey, list:[{id,type,label,target,progress,rewardCoins,rewardTokens,done}]}
+  stats:{blocksMined:0, coinsEarned:0, eggsHatched:0, maxStageReached:0}, // de por vida, nunca se resetea (ni con renacer)
+  achievementsClaimed:{}, // {achievementId:true}
+  redeemedCodes:{},       // {code:true}
 };
 function rebirthThreshold(){ return Math.floor(10000*Math.pow(state.rebirths+1,1.6)); }
 function canRebirth(){ return state.coins >= rebirthThreshold(); }
 
-// suma los bonos de las mascotas equipadas (máx. 3, así que es barato calcular esto seguido)
+// Rangos/títulos cosméticos según renacimientos totales (se muestran en el HUD propio
+// y arriba de la cabeza de otros jugadores conectados).
+const TITLES = [
+  {min:0,  name:'Minero Novato'},
+  {min:1,  name:'Minero Experimentado'},
+  {min:3,  name:'Maestro Minero'},
+  {min:6,  name:'Leyenda de la Mina'},
+  {min:12, name:'Titán del Abismo'},
+];
+function titleForRebirths(r){
+  let t = TITLES[0];
+  for(const cand of TITLES){ if(r >= cand.min) t = cand; }
+  return t.name;
+}
+
+// Gemas: moneda secundaria rara. Los minerales que "brillan" (glow:true) tienen una
+// pequeña chance extra de soltar 1 gema al picarlos, sin importar el mundo.
+const GEM_DROP_CHANCE = 0.03;
+function maybeDropGem(oreInfo){
+  if(!oreInfo.glow) return;
+  if(Math.random() < GEM_DROP_CHANCE){
+    state.gems += 1;
+    toast('💎 +1 Gema', '#6fe7ff');
+  }
+}
+// Tienda de Gemas: cada compra sube un multiplicador PERMANENTE aparte (no se resetea
+// nunca, ni siquiera al renacer) +2%, con costo creciente — es el sumidero de progreso
+// para jugadores muy avanzados que ya tienen todo lo demás.
+function gemUpgradeCost(){ return 5 + Math.round(5*Math.pow(1.35, state.gemUpgrades)); }
+function gemMultBonus(){ return state.gemUpgrades * 0.02; }
+const AOE_MINING_COST = 60;
+function buyGemUpgrade(){
+  const cost = gemUpgradeCost();
+  if(state.gems < cost){ toast('No tenés suficientes gemas', '#ff5d5d'); return; }
+  state.gems -= cost;
+  state.gemUpgrades += 1;
+  toast('💎 Multiplicador +2% permanente (ahora +'+Math.round(gemMultBonus()*100)+'%)', '#6fe7ff');
+  markDirty(); updateHUD(); renderRebirthShop();
+}
+
+// Mascotas Doradas: variante rara (5%) de cualquier mascota al eclosionar, con +50%
+// de stats sobre la misma mascota normal (se combina multiplicativamente con el nivel).
+const GOLDEN_CHANCE = 0.05;
+function rollGolden(){ return Math.random() < GOLDEN_CHANCE; }
+function makePetInstance(template){
+  const golden = rollGolden();
+  return {
+    uid: 'p'+Date.now().toString(36)+Math.floor(Math.random()*1000),
+    id: template.id, name: template.name, rarity: template.rarity,
+    coinMult: template.coinMult, dpsMult: template.dpsMult, luck: template.luck, cap: template.cap,
+    level: 1, xp: 0, golden,
+  };
+}
+
+/* ---------- logros (permanentes, de por vida — no se resetean con renacer) ---------- */
+const ACHIEVEMENTS = [
+  {id:'mine100',   label:'Picar 100 bloques',                check:s=>s.stats.blocksMined>=100,          rewardCoins:500,   rewardTokens:0, rewardGems:0},
+  {id:'mine5000',  label:'Picar 5.000 bloques',               check:s=>s.stats.blocksMined>=5000,         rewardCoins:0,     rewardTokens:1, rewardGems:0},
+  {id:'mine50000', label:'Picar 50.000 bloques',              check:s=>s.stats.blocksMined>=50000,        rewardCoins:0,     rewardTokens:5, rewardGems:10},
+  {id:'sell10k',   label:'Vender $10.000 en total',           check:s=>s.stats.coinsEarned>=10000,        rewardCoins:0,     rewardTokens:2, rewardGems:0},
+  {id:'sell1m',    label:'Vender $1.000.000 en total',        check:s=>s.stats.coinsEarned>=1000000,      rewardCoins:0,     rewardTokens:10,rewardGems:20},
+  {id:'rebirth1',  label:'Renacer por primera vez',           check:s=>s.rebirths>=1,                     rewardCoins:0,     rewardTokens:0, rewardGems:5},
+  {id:'reachVolc', label:'Llegar al Volcán',                  check:s=>s.stats.maxStageReached>=2,        rewardCoins:0,     rewardTokens:0, rewardGems:10},
+  {id:'reachAbys', label:'Llegar al Abismo Místico',          check:s=>s.stats.maxStageReached>=3,        rewardCoins:0,     rewardTokens:3, rewardGems:20},
+  {id:'golden1',   label:'Conseguir una mascota Dorada',      check:s=>s.pets.some(p=>p.golden),          rewardCoins:0,     rewardTokens:0, rewardGems:15},
+  {id:'petMax',    label:'Subir una mascota a nivel máximo',  check:s=>s.pets.some(p=>(p.level||1)>=PET_MAX_LEVEL), rewardCoins:0, rewardTokens:2, rewardGems:10},
+];
+function checkAchievements(){
+  let any = false;
+  ACHIEVEMENTS.forEach(a=>{
+    if(state.achievementsClaimed[a.id]) return;
+    if(a.check(state)){
+      state.achievementsClaimed[a.id] = true;
+      state.coins += a.rewardCoins;
+      state.tokens += a.rewardTokens;
+      state.gems += a.rewardGems;
+      any = true;
+      const parts = [];
+      if(a.rewardCoins) parts.push('+$'+fmt(a.rewardCoins));
+      if(a.rewardTokens) parts.push('+'+a.rewardTokens+' 🪙');
+      if(a.rewardGems) parts.push('+'+a.rewardGems+' 💎');
+      toast('🏆 Logro: '+a.label+' ('+parts.join(', ')+')', '#ffd23f');
+    }
+  });
+  if(any){ markDirty(); updateHUD(); if(typeof renderAchievements==='function') renderAchievements(); }
+}
+
+/* ---------- códigos canjeables ---------- */
+const CODES = {
+  'MINA3D':     {coins:2000, tokens:0, gems:0},
+  'BIENVENIDO': {coins:1000, tokens:1, gems:0},
+  'GEMASGRATIS':{coins:0,    tokens:0, gems:10},
+};
+function redeemCode(raw){
+  const code = (raw||'').trim().toUpperCase();
+  if(!code) return;
+  if(state.redeemedCodes[code]){ toast('Ese código ya fue usado', '#ffb14e'); return; }
+  const reward = CODES[code];
+  if(!reward){ toast('Código inválido', '#ff5d5d'); return; }
+  state.redeemedCodes[code] = true;
+  state.coins += reward.coins||0;
+  state.tokens += reward.tokens||0;
+  state.gems += reward.gems||0;
+  const parts = [];
+  if(reward.coins) parts.push('+$'+fmt(reward.coins));
+  if(reward.tokens) parts.push('+'+reward.tokens+' 🪙');
+  if(reward.gems) parts.push('+'+reward.gems+' 💎');
+  toast('🎁 Código canjeado: '+parts.join(', '), '#3ddc84');
+  markDirty(); updateHUD();
+}
+
+// Nivel de mascota: sube de nivel picando bloques mientras está equipada (máx. nivel 10).
+// Cada nivel aporta +8% sobre las stats base de esa mascota (nivel 10 = +72%).
+const PET_MAX_LEVEL = 10;
+function xpForPetLevel(level){ return Math.round(60 * Math.pow(level, 1.35)); }
+function petLevelMult(level){ return 1 + (Math.max(1,level)-1) * 0.08; }
+function gainPetXP(uid, amount){
+  const p = state.pets.find(pp=>pp.uid===uid);
+  if(!p || p.level >= PET_MAX_LEVEL) return;
+  p.xp = (p.xp||0) + amount;
+  let leveledUp = false;
+  while(p.level < PET_MAX_LEVEL && p.xp >= xpForPetLevel(p.level)){
+    p.xp -= xpForPetLevel(p.level);
+    p.level += 1;
+    leveledUp = true;
+  }
+  if(leveledUp){
+    toast('⭐ '+p.name+' subió a nivel '+p.level+'!', '#ffd23f');
+    if(petsOpenFlag) renderPets();
+  }
+}
+
+// suma los bonos de las mascotas equipadas (máx. 3, así que es barato calcular esto seguido),
+// ya escalados por el nivel de cada una y por si es una variante Dorada (+50%).
 function petBonuses(){
   let coinMult=1, dpsMult=1, luck=0, cap=0;
   state.equippedPets.forEach(uid=>{
     const p = state.pets.find(pp=>pp.uid===uid);
     if(!p) return;
-    coinMult += p.coinMult;
-    dpsMult += p.dpsMult;
-    luck += p.luck;
-    cap += p.cap;
+    const m = petLevelMult(p.level||1) * (p.golden ? 1.5 : 1);
+    coinMult += p.coinMult*m;
+    dpsMult += p.dpsMult*m;
+    luck += p.luck*m;
+    cap += p.cap*m;
   });
   return {coinMult, dpsMult, luck, cap};
 }
 function effectiveCapacity(){
-  return BACKPACKS[state.backpackTier].cap + petBonuses().cap;
+  return BACKPACKS[state.backpackTier].cap + petBonuses().cap + (state.rebirthBackpack ? 2000 : 0);
+}
+function effectiveDps(){
+  return PICKAXES[state.pickaxeTier].dps * petBonuses().dpsMult * (state.rebirthPickaxe ? 1.2 : 1);
+}
+
+/* ---------- misiones diarias ---------- */
+// 3 misiones fijas por día real (minar / vender / eclosionar), escaladas por renacimientos.
+// Se completan solas (sin botón de reclamar) apenas se alcanza el objetivo.
+const QUEST_TYPES = ['mine','sell','hatch'];
+function dayKey(){ const d=new Date(); return d.getUTCFullYear()+'-'+(d.getUTCMonth()+1)+'-'+d.getUTCDate(); }
+function makeQuestList(){
+  const s = 1 + state.rebirths*0.5;
+  return [
+    {id:'mine',  type:'mine',  label:'Minar bloques',        target: Math.round(200*s),  progress:0, rewardCoins: Math.round(200*s*3),  rewardTokens:1, done:false},
+    {id:'sell',  type:'sell',  label:'Vender monedas',       target: Math.round(3000*s), progress:0, rewardCoins: Math.round(3000*s*0.15), rewardTokens:1, done:false},
+    {id:'hatch', type:'hatch', label:'Abrir huevos',         target: 1 + Math.min(state.rebirths,4), progress:0, rewardCoins: Math.round(2000*s), rewardTokens:2, done:false},
+  ];
+}
+function ensureQuests(){
+  const today = dayKey();
+  if(!state.quests || state.quests.dayKey !== today){
+    state.quests = {dayKey: today, list: makeQuestList()};
+    markDirty();
+  }
+}
+function questProgress(type, amount){
+  ensureQuests();
+  const q = state.quests.list.find(x=>x.type===type && !x.done);
+  if(!q) return;
+  q.progress = Math.min(q.target, q.progress + amount);
+  if(q.progress >= q.target){
+    q.done = true;
+    state.coins += q.rewardCoins;
+    state.tokens += q.rewardTokens;
+    toast('✅ Misión completa: '+q.label+' (+$'+fmt(q.rewardCoins)+', +'+q.rewardTokens+' 🪙)', '#3ddc84');
+    updateHUD();
+  }
+  markDirty();
+  renderQuests();
 }
 
 /* ======================= THREE SETUP ======================= */
@@ -502,6 +693,8 @@ buildWalls();
 function applyStageTheme(stageIdx){
   const stg = STAGES[stageIdx];
   state.stage = stageIdx;
+  state.stats.maxStageReached = Math.max(state.stats.maxStageReached, stageIdx);
+  checkAchievements();
   groundMat.color.setHex(stg.ground);
   wallMat.color.setHex(stg.ground);
   paintSky(stg.sky);
@@ -1022,13 +1215,13 @@ function mine(hit, dt){
     if(now - lastLockToast > 1500){ toast('🔒 Necesitás un pico mejor para picar '+info.name, '#ff5d5d'); lastLockToast = now; }
     return;
   }
-  entry.health -= PICKAXES[state.pickaxeTier].dps * petBonuses().dpsMult * dt;
+  entry.health -= effectiveDps() * dt;
   if(entry.health <= 0){
     breakBlock(hit.key);
   }
 }
 
-function breakBlock(k){
+function breakBlock(k, viaAoe){
   const entry = blocks.get(k);
   if(!entry || ORES[entry.type].unbreakable) return;
   const pos = entry.mesh.position.clone();
@@ -1037,11 +1230,33 @@ function breakBlock(k){
   blocks.delete(k);
   spawnParticles(pos, ORES[type].color);
   addOre(type, 1);
+  maybeDropGem(ORES[type]);
   const luck = petBonuses().luck;
   if(luck > 0 && Math.random() < luck){
     addOre(type, 1);
     toast('¡Suerte de mascota! +1 extra', '#ffd23f');
   }
+  state.equippedPets.forEach(uid=> gainPetXP(uid, 1));
+  questProgress('mine', 1);
+  state.stats.blocksMined += 1;
+  checkAchievements();
+  if(!viaAoe) tryAoeBreak(pos);
+}
+
+// Minado en Área (perk permanente comprado con gemas): al romper un bloque, también
+// rompe de regalo los 6 bloques vecinos ortogonales que ya podrías picar con tu pico
+// actual (no encadena más allá de ese primer anillo, para no vaciar la mina de un golpe).
+function tryAoeBreak(pos){
+  if(!state.aoeMining) return;
+  const gx = Math.round(pos.x), gy = Math.round(pos.y), gz = Math.round(pos.z);
+  const dirs = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+  dirs.forEach(([dx,dy,dz])=>{
+    const k2 = key(gx+dx, gy+dy, gz+dz);
+    const e2 = blocks.get(k2);
+    if(e2 && !ORES[e2.type].unbreakable && ORES[e2.type].hardness <= PICKAXES[state.pickaxeTier].maxHardness){
+      breakBlock(k2, true);
+    }
+  });
 }
 
 function addOre(type, n){
@@ -1063,10 +1278,13 @@ function sellAll(){
   if(total === 0){ toast('No tienes minerales para vender', '#ffb14e'); return; }
   let value = 0;
   for(const t in state.inventory){ value += ORES[t].value * state.inventory[t]; }
-  value = Math.round(value * state.multiplier * petBonuses().coinMult * STAGES[state.stage].valueMult);
+  value = Math.round(value * (state.multiplier + gemMultBonus()) * petBonuses().coinMult * STAGES[state.stage].valueMult);
   state.coins += value;
   state.inventory = {};
   toast('Vendido por $' + fmt(value), '#ffd23f');
+  questProgress('sell', value);
+  state.stats.coinsEarned += value;
+  checkAchievements();
   markDirty();
   updateHUD();
 }
@@ -1119,6 +1337,9 @@ function updateTorchFlicker(t){
 const hud = document.getElementById('hud');
 const coinsVal = document.getElementById('coinsVal');
 const multVal = document.getElementById('multVal');
+const tokensVal = document.getElementById('tokensVal');
+const gemsVal = document.getElementById('gemsVal');
+const titleVal = document.getElementById('titleVal');
 const invBarInner = document.getElementById('invBarInner');
 const invText = document.getElementById('invText');
 const invList = document.getElementById('invList');
@@ -1184,9 +1405,12 @@ function updateTargetPanel(hit){
 
 function updateHUD(){
   coinsVal.textContent = '$' + fmt(state.coins);
-  multVal.textContent = 'x' + state.multiplier;
-  pickaxeNameEl.textContent = PICKAXES[state.pickaxeTier].name;
-  backpackNameEl.textContent = BACKPACKS[state.backpackTier].name;
+  multVal.textContent = 'x' + (+(state.multiplier + gemMultBonus()).toFixed(2));
+  tokensVal.textContent = fmt(state.tokens);
+  gemsVal.textContent = fmt(state.gems);
+  titleVal.textContent = titleForRebirths(state.rebirths);
+  pickaxeNameEl.textContent = PICKAXES[state.pickaxeTier].name + (state.rebirthPickaxe ? ' +👑' : '');
+  backpackNameEl.textContent = BACKPACKS[state.backpackTier].name + (state.rebirthBackpack ? ' +👑' : '');
   stageNameEl.textContent = STAGES[state.stage].name;
 
   const total = Object.values(state.inventory).reduce((a,b)=>a+b,0);
@@ -1208,6 +1432,24 @@ function updateHUD(){
 
   if(shopOpenFlag) renderShop();
   if(petsOpenFlag) renderPets();
+  renderQuests();
+}
+
+/* ---------- misiones diarias (panel HUD, sin necesidad de abrir un modal) ---------- */
+const questPanel = document.getElementById('questPanel');
+const questList = document.getElementById('questList');
+function renderQuests(){
+  if(!questPanel) return;
+  ensureQuests();
+  questList.innerHTML = '';
+  state.quests.list.forEach(q=>{
+    const pct = Math.min(100, Math.round(100*q.progress/q.target));
+    const row = document.createElement('div');
+    row.className = 'quest-row' + (q.done ? ' done' : '');
+    row.innerHTML = '<div class="quest-label">'+(q.done?'✅ ':'')+q.label+' <span class="mono">'+Math.min(q.progress,q.target)+'/'+q.target+'</span></div>'+
+      '<div class="quest-bar-wrap"><div class="quest-bar-inner" style="width:'+pct+'%"></div></div>';
+    questList.appendChild(row);
+  });
 }
 
 /* shop */
@@ -1280,12 +1522,105 @@ document.getElementById('shopClose').onclick = closeShop;
 
 /* rebirth modal */
 const rebirthModal = document.getElementById('rebirthModal');
+const rebirthTokensEl = document.getElementById('rebirthTokens');
+const rebirthGearList = document.getElementById('rebirthGearList');
+const rebirthEggList = document.getElementById('rebirthEggList');
+const gemShopList = document.getElementById('gemShopList');
+const rebirthThreshInfo = document.getElementById('rebirthThreshInfo');
+
+function renderRebirthShop(){
+  rebirthTokensEl.textContent = '🪙 ' + fmt(state.tokens);
+  rebirthThreshInfo.textContent = 'Con este renacimiento vas a ganar '+tokensForRebirth()+' 🪙 Token'+(tokensForRebirth()===1?'':'s')+' de Renacimiento.';
+
+  rebirthGearList.innerHTML = '';
+  [['pickaxe','rebirthPickaxe'], ['backpack','rebirthBackpack']].forEach(([key,flag])=>{
+    const g = REBIRTH_GEAR[key];
+    const owned = state[flag];
+    const row = document.createElement('div');
+    row.className = 'shop-row' + (owned ? ' owned' : '');
+    row.innerHTML = '<div class="shop-row-main"><b>'+g.name+'</b><span>'+g.desc+'</span></div>';
+    const btn = document.createElement('button');
+    btn.textContent = owned ? 'Adquirido' : '🪙 '+g.cost;
+    btn.disabled = owned || state.tokens < g.cost;
+    btn.onclick = ()=>{
+      state.tokens -= g.cost;
+      state[flag] = true;
+      toast('¡'+g.name+' permanente adquirido!', '#ffd23f');
+      markDirty(); updateHUD(); renderRebirthShop();
+    };
+    row.appendChild(btn);
+    rebirthGearList.appendChild(row);
+  });
+
+  rebirthEggList.innerHTML = '';
+  TOKEN_EGGS.forEach(egg=>{
+    const row = document.createElement('div');
+    row.className = 'shop-row';
+    row.innerHTML = '<div class="shop-row-main"><b>'+egg.name+'</b><span>Mejores probabilidades que los huevos de monedas</span></div>';
+    const btn = document.createElement('button');
+    btn.textContent = '🪙 ' + egg.cost;
+    btn.disabled = state.tokens < egg.cost || hatchAnimating;
+    btn.onclick = ()=> hatchTokenEgg(egg);
+    row.appendChild(btn);
+    rebirthEggList.appendChild(row);
+  });
+
+  gemShopList.innerHTML = '';
+  gemShopList.appendChild((()=>{
+    const row = document.createElement('div');
+    row.className = 'shop-row';
+    row.innerHTML = '<div class="shop-row-main"><b>Multiplicador de Gemas</b><span>+2% permanente (actual: +'+Math.round(gemMultBonus()*100)+'%) · nivel '+state.gemUpgrades+'</span></div>';
+    const btn = document.createElement('button');
+    btn.textContent = '💎 ' + gemUpgradeCost();
+    btn.disabled = state.gems < gemUpgradeCost();
+    btn.onclick = buyGemUpgrade;
+    row.appendChild(btn);
+    return row;
+  })());
+  gemShopList.appendChild((()=>{
+    const row = document.createElement('div');
+    row.className = 'shop-row' + (state.aoeMining ? ' owned' : '');
+    row.innerHTML = '<div class="shop-row-main"><b>Minado en Área</b><span>Al romper un bloque, también rompe los 6 vecinos que ya puedas picar</span></div>';
+    const btn = document.createElement('button');
+    btn.textContent = state.aoeMining ? 'Adquirido' : '💎 ' + AOE_MINING_COST;
+    btn.disabled = state.aoeMining || state.gems < AOE_MINING_COST;
+    btn.onclick = ()=>{
+      state.gems -= AOE_MINING_COST;
+      state.aoeMining = true;
+      toast('⛏️ ¡Minado en Área activado permanentemente!', '#6fe7ff');
+      markDirty(); updateHUD(); renderRebirthShop();
+    };
+    row.appendChild(btn);
+    return row;
+  })());
+}
+
+function hatchTokenEgg(egg){
+  if(hatchAnimating) return;
+  if(state.tokens < egg.cost){ toast('No tenés suficientes tokens', '#ff5d5d'); return; }
+  state.tokens -= egg.cost;
+  const rarity = weightedPick(egg.table);
+  const candidates = PETS.filter(p=>p.rarity===rarity);
+  const template = candidates[Math.floor(Math.random()*candidates.length)];
+  const inst = makePetInstance(template);
+  state.pets.push(inst);
+  questProgress('hatch', 1);
+  state.stats.eggsHatched += 1;
+  checkAchievements();
+  markDirty();
+  updateHUD();
+  renderRebirthShop();
+  playHatchAnimation(template, rarity, inst.golden);
+}
+
+function tokensForRebirth(){ return 1 + state.stage; } // llegar más lejos en el mapa da más tokens
 function openRebirth(){
   if(!canRebirth()){ toast('Necesitas $'+fmt(rebirthThreshold())+' para renacer', '#ffb14e'); return; }
   rebirthOpenFlag = true;
   isPaused = true;
   isMining = false;
   releaseLook();
+  renderRebirthShop();
   rebirthModal.classList.remove('hidden');
 }
 function closeRebirth(){
@@ -1296,17 +1631,20 @@ function closeRebirth(){
 }
 document.getElementById('rebirthCancel').onclick = closeRebirth;
 document.getElementById('rebirthConfirm').onclick = ()=>{
+  const tokensEarned = tokensForRebirth();
   state.rebirths += 1;
   state.multiplier = +(1 + state.rebirths*0.25).toFixed(2);
+  state.tokens += tokensEarned;
   state.coins = 0;
   state.pickaxeTier = 0;
   state.backpackTier = 0;
+  // el equipo de la Corona (comprado con tokens) es permanente: NO se resetea acá.
   state.inventory = {};
   regenerateField();
   equipPickaxeVisual();
   markDirty();
   updateHUD();
-  toast('¡Renaciste! Multiplicador x'+state.multiplier, '#ff5cf0');
+  toast('¡Renaciste! Multiplicador x'+state.multiplier+' · +'+tokensEarned+' 🪙', '#ff5cf0');
   closeRebirth();
 };
 
@@ -1366,6 +1704,7 @@ function openStages(){
   releaseLook();
   renderStages();
   renderRanking();
+  renderAchievements();
   stagesModal.classList.remove('hidden');
 }
 function closeStages(){
@@ -1375,6 +1714,39 @@ function closeStages(){
   requestLook();
 }
 document.getElementById('stagesClose').onclick = closeStages;
+
+/* ---------- UI de logros y códigos (dentro del Portal) ---------- */
+const achievementList = document.getElementById('achievementList');
+const achievementCount = document.getElementById('achievementCount');
+function renderAchievements(){
+  if(!achievementList) return;
+  const done = ACHIEVEMENTS.filter(a=>state.achievementsClaimed[a.id]).length;
+  achievementCount.textContent = '('+done+'/'+ACHIEVEMENTS.length+')';
+  achievementList.innerHTML = '';
+  ACHIEVEMENTS.forEach(a=>{
+    const isDone = !!state.achievementsClaimed[a.id];
+    const parts = [];
+    if(a.rewardCoins) parts.push('+$'+fmt(a.rewardCoins));
+    if(a.rewardTokens) parts.push('+'+a.rewardTokens+' 🪙');
+    if(a.rewardGems) parts.push('+'+a.rewardGems+' 💎');
+    const row = document.createElement('div');
+    row.className = 'ach-row' + (isDone ? ' done' : '');
+    row.innerHTML = '<span class="ach-icon">'+(isDone?'🏆':'🔒')+'</span>'+
+      '<div class="ach-main"><span>'+a.label+'</span><span class="ach-reward">'+parts.join(', ')+'</span></div>';
+    achievementList.appendChild(row);
+  });
+}
+
+const codeInput = document.getElementById('codeInput');
+const codeRedeemBtn = document.getElementById('codeRedeemBtn');
+codeRedeemBtn.onclick = ()=>{
+  redeemCode(codeInput.value);
+  codeInput.value = '';
+};
+codeInput.addEventListener('keydown', e=>{
+  if(e.key === 'Enter'){ e.preventDefault(); codeRedeemBtn.click(); }
+  e.stopPropagation(); // no dejar que WASD/otros atajos del juego se disparen mientras se escribe
+});
 
 /* ---------- eggs / pets modal ---------- */
 const petsModal = document.getElementById('petsModal');
@@ -1392,15 +1764,14 @@ function hatchEgg(egg){
   const rarity = weightedPick(egg.table);
   const candidates = PETS.filter(p=>p.rarity===rarity);
   const template = candidates[Math.floor(Math.random()*candidates.length)];
-  const inst = {
-    uid: 'p'+Date.now().toString(36)+Math.floor(Math.random()*1000),
-    id: template.id, name: template.name, rarity: template.rarity,
-    coinMult: template.coinMult, dpsMult: template.dpsMult, luck: template.luck, cap: template.cap,
-  };
+  const inst = makePetInstance(template);
   state.pets.push(inst);
+  questProgress('hatch', 1);
+  state.stats.eggsHatched += 1;
+  checkAchievements();
   markDirty();
   updateHUD();
-  playHatchAnimation(template, rarity);
+  playHatchAnimation(template, rarity, inst.golden);
 }
 
 const hatchReveal = document.getElementById('hatchReveal');
@@ -1410,18 +1781,19 @@ const hatchResult = document.getElementById('hatchResult');
 const hatchRarity = document.getElementById('hatchRarity');
 const hatchName = document.getElementById('hatchName');
 
-function playHatchAnimation(template, rarity){
+function playHatchAnimation(template, rarity, golden){
   hatchAnimating = true;
   renderEggs(); // refresca para deshabilitar los botones mientras se reproduce
 
   const info = PET_RARITIES[rarity];
+  const color = golden ? 0xffe066 : info.color;
   hatchEggEmoji.className = 'hatch-egg';
   hatchEggEmoji.textContent = '🥚';
   hatchGlow.className = 'hatch-glow';
-  hatchGlow.style.background = 'radial-gradient(circle, '+hexStr(info.color)+' 0%, transparent 72%)';
+  hatchGlow.style.background = 'radial-gradient(circle, '+hexStr(color)+' 0%, transparent 72%)';
   hatchResult.className = 'hatch-result';
-  hatchRarity.textContent = info.name;
-  hatchRarity.style.color = hexStr(info.color);
+  hatchRarity.textContent = golden ? '✨ '+info.name+' DORADA ✨' : info.name;
+  hatchRarity.style.color = hexStr(color);
   hatchName.textContent = template.name;
   hatchReveal.classList.remove('hidden');
 
@@ -1431,7 +1803,7 @@ function playHatchAnimation(template, rarity){
   }, 850);
   setTimeout(()=>{
     hatchResult.classList.add('show');
-    toast('¡Obtuviste a '+template.name+'! ('+info.name+')', hexStr(info.color));
+    toast((golden?'✨ ¡DORADA! ':'¡')+'Obtuviste a '+template.name+'! ('+info.name+')', hexStr(color));
   }, 1150);
   setTimeout(()=>{
     hatchReveal.classList.add('hidden');
@@ -1490,10 +1862,16 @@ function renderPets(){
   sorted.forEach(p=>{
     const equipped = state.equippedPets.includes(p.uid);
     const rarityInfo = PET_RARITIES[p.rarity];
+    const level = p.level||1;
+    const m = petLevelMult(level) * (p.golden ? 1.5 : 1);
+    const maxed = level >= PET_MAX_LEVEL;
+    const xpPct = maxed ? 100 : Math.round(100*(p.xp||0)/xpForPetLevel(level));
     const row = document.createElement('div');
-    row.className = 'shop-row' + (equipped ? ' equipped' : '');
-    row.innerHTML = '<div class="shop-row-main"><b><span class="rarity-dot" style="background:'+hexStr(rarityInfo.color)+';color:'+hexStr(rarityInfo.color)+'"></span>'+p.name+'</b>'+
-      '<span>'+rarityInfo.name+' · +'+Math.round(p.coinMult*100)+'% monedas, +'+Math.round(p.dpsMult*100)+'% picado'+(p.luck>0?', +'+Math.round(p.luck*100)+'% suerte':'')+(p.cap>0?', +'+p.cap+' mochila':'')+'</span></div>';
+    row.className = 'shop-row' + (equipped ? ' equipped' : '') + (p.golden ? ' golden' : '');
+    row.innerHTML = '<div class="shop-row-main"><b><span class="rarity-dot" style="background:'+hexStr(rarityInfo.color)+';color:'+hexStr(rarityInfo.color)+'"></span>'+(p.golden?'✨ ':'')+p.name+(p.golden?' Dorada':'')+' <span class="mono" style="color:var(--cyan);font-size:11px;">Nv.'+level+'</span></b>'+
+      '<span>'+rarityInfo.name+' · +'+Math.round(p.coinMult*m*100)+'% monedas, +'+Math.round(p.dpsMult*m*100)+'% picado'+(p.luck>0?', +'+Math.round(p.luck*m*100)+'% suerte':'')+(p.cap>0?', +'+Math.round(p.cap*m)+' mochila':'')+'</span>'+
+      '<div class="pet-xp-wrap"><div class="pet-xp-inner" style="width:'+xpPct+'%"></div></div>'+
+      '<span style="font-size:10px;color:var(--text-dim);">'+(maxed?'Nivel máximo':(Math.round(p.xp||0)+' / '+xpForPetLevel(level)+' XP'))+'</span></div>';
     const btn = document.createElement('button');
     btn.textContent = equipped ? 'Quitar' : 'Equipar';
     btn.disabled = !equipped && state.equippedPets.length >= MAX_EQUIPPED_PETS;
@@ -1581,16 +1959,30 @@ async function loadProgress(){
       Object.assign(state, saved);
     }
   }catch(e){ /* no había progreso guardado todavía, o falló — arrancamos de 0 */ }
+  // compatibilidad con partidas guardadas antes del sistema de niveles de mascota / tokens / gemas
+  state.tokens = state.tokens || 0;
+  state.gems = state.gems || 0;
+  state.gemUpgrades = state.gemUpgrades || 0;
+  state.aoeMining = !!state.aoeMining;
+  state.stats = Object.assign({blocksMined:0, coinsEarned:0, eggsHatched:0, maxStageReached:0}, state.stats||{});
+  state.achievementsClaimed = state.achievementsClaimed || {};
+  state.redeemedCodes = state.redeemedCodes || {};
+  (state.pets||[]).forEach(p=>{ if(p.level==null) p.level=1; if(p.xp==null) p.xp=0; if(p.golden==null) p.golden=false; });
+  ensureQuests();
 }
 
 async function persistProgress(){
   if(!progressDirty) return;
   progressDirty = false;
   const payload = JSON.stringify({
-    coins: state.coins, rebirths: state.rebirths, multiplier: state.multiplier,
+    coins: state.coins, rebirths: state.rebirths, multiplier: state.multiplier, tokens: state.tokens,
+    gems: state.gems, gemUpgrades: state.gemUpgrades, aoeMining: state.aoeMining,
     pickaxeTier: state.pickaxeTier, backpackTier: state.backpackTier,
+    rebirthPickaxe: state.rebirthPickaxe, rebirthBackpack: state.rebirthBackpack,
     inventory: state.inventory, stage: state.stage,
     pets: state.pets, equippedPets: state.equippedPets,
+    quests: state.quests,
+    stats: state.stats, achievementsClaimed: state.achievementsClaimed, redeemedCodes: state.redeemedCodes,
   });
   try{
     if(typeof window.storage !== 'undefined' && window.storage){
@@ -1796,17 +2188,18 @@ const PET_MODEL_BUILDERS = {
   },
 };
 
-function buildPetFollowerMesh(id, rarity){
+function buildPetFollowerMesh(id, rarity, golden){
   const info = PET_RARITIES[rarity] || PET_RARITIES.common;
-  const glow = (rarity==='mythic'||rarity==='legendary');
+  const glow = (rarity==='mythic'||rarity==='legendary') || golden;
+  const color = golden ? 0xffe066 : info.color;
   const mat = new THREE.MeshStandardMaterial({
-    color:info.color, roughness:0.4, metalness:0.2,
-    emissive:info.color, emissiveIntensity: glow ? 0.55 : 0.32,
+    color, roughness:0.35, metalness:golden?0.7:0.2,
+    emissive:color, emissiveIntensity: golden ? 0.85 : (glow ? 0.55 : 0.32),
   });
   mat.userData.glowEyes = glow;
   const builder = PET_MODEL_BUILDERS[id] || PET_MODEL_BUILDERS.mole;
   const group = builder(mat);
-  group.scale.setScalar(PET_RARITY_SCALE[rarity] || 1);
+  group.scale.setScalar((PET_RARITY_SCALE[rarity] || 1) * (golden?1.12:1));
   return group;
 }
 
@@ -1826,7 +2219,7 @@ function rebuildPetFollowers(followerArr, parentScene, pets){
   followerArr.forEach(f=> parentScene.remove(f.mesh));
   followerArr.length = 0;
   (pets||[]).slice(0,3).forEach((p, i)=>{
-    const mesh = buildPetFollowerMesh(p.id, p.rarity);
+    const mesh = buildPetFollowerMesh(p.id, p.rarity, p.golden);
     parentScene.add(mesh);
     followerArr.push({mesh, seed:Math.random()*10});
   });
@@ -1847,8 +2240,9 @@ const otherPlayerAvatars = new Map(); // id -> {group, target:Vector3, pets:[]}
 function createAvatar(id, data){
   const color = hashColor(data.name || id);
   const group = buildMinerSkin(color);
-  const tag = makeTextSprite(data.name || '???', '#f3e9da');
-  tag.scale.set(1.3,0.5,1);
+  const title = titleForRebirths(data.rebirths||0);
+  const tag = makeTextSprite((data.name || '???') + ' · ' + title, '#f3e9da');
+  tag.scale.set(2.1,0.5,1);
   tag.position.y = 2.15;
   group.add(tag);
   scene.add(group);
@@ -1863,7 +2257,7 @@ function upsertOtherPlayer(id, data){
   av.target.set(data.x, data.y, data.z);
   av.yaw = data.yaw || 0;
   av.group.visible = (data.stage === state.stage);
-  const rarKey = (data.pets||[]).map(p=>p.id+':'+p.rarity).join(',');
+  const rarKey = (data.pets||[]).map(p=>p.id+':'+p.rarity+':'+(p.golden?'g':'n')).join(',');
   if(rarKey !== av.petRarities){
     av.petRarities = rarKey;
     rebuildPetFollowers(av.pets, scene, data.pets);
@@ -1974,7 +2368,7 @@ function netBroadcast(){
     stage: state.stage, coins: state.coins, rebirths: state.rebirths,
     pets: state.equippedPets.map(uid=>{
       const p = state.pets.find(pp=>pp.uid===uid);
-      return p ? {id:p.id, rarity:p.rarity} : null;
+      return p ? {id:p.id, rarity:p.rarity, golden:!!p.golden} : null;
     }).filter(Boolean),
   };
   if(Net.mode === 'firebase'){
@@ -2041,7 +2435,7 @@ const myPetFollowers = []; // criaturas que te siguen a vos, visibles si te das 
 function rebuildMyPetFollowers(){
   const pets = state.equippedPets.map(uid=>{
     const p = state.pets.find(pp=>pp.uid===uid);
-    return p ? {id:p.id, rarity:p.rarity} : null;
+    return p ? {id:p.id, rarity:p.rarity, golden:!!p.golden} : null;
   }).filter(Boolean);
   rebuildPetFollowers(myPetFollowers, scene, pets);
 }
@@ -2227,11 +2621,20 @@ window.addEventListener('keydown', (e)=>{
         state.coins = 0;
         state.rebirths = 0;
         state.multiplier = 1;
+        state.tokens = 0;
+        state.gems = 0;
+        state.gemUpgrades = 0;
+        state.aoeMining = false;
+        state.rebirthPickaxe = false;
+        state.rebirthBackpack = false;
         state.pickaxeTier = 0;
         state.backpackTier = 0;
         state.inventory = {};
         state.pets = [];
         state.equippedPets = [];
+        state.stats = {blocksMined:0, coinsEarned:0, eggsHatched:0, maxStageReached:0};
+        state.achievementsClaimed = {};
+        state.redeemedCodes = {};
         godModeToggled = false;
         equipPickaxeVisual();
         rebuildMyPetFollowers();
