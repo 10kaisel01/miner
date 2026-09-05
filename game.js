@@ -242,6 +242,7 @@ const state = {
   pickaxeTier:0, backpackTier:0,
   rebirthPickaxe:false, rebirthBackpack:false, // gear del renacimiento: comprado con tokens, NO se pierde al renacer
   aoeMining:false, // perk permanente comprado con gemas
+  coinBoostUntil:0, luckBoostUntil:0, // timestamps (Date.now()) de boosts temporales activos
   inventory:{},
   stage:0,
   pets:[],          // {uid,id,name,rarity,coinMult,dpsMult,luck,cap,level,xp,golden}
@@ -285,6 +286,24 @@ function maybeDropGem(oreInfo){
 function gemUpgradeCost(){ return 5 + Math.round(5*Math.pow(1.35, state.gemUpgrades)); }
 function gemMultBonus(){ return state.gemUpgrades * 0.02; }
 const AOE_MINING_COST = 60;
+
+/* ---------- boosts temporales (comprados con gemas, se pueden extender comprando de nuevo) ---------- */
+const BOOST_DEFS = {
+  coin2x: {name:'Boost de Monedas x2', icon:'💰', duration:5*60*1000, costGems:20, statKey:'coinBoostUntil'},
+  luck:   {name:'Boost de Suerte',      icon:'🍀', duration:5*60*1000, costGems:15, statKey:'luckBoostUntil'},
+};
+function isBoostActive(statKey){ return (state[statKey]||0) > Date.now(); }
+function boostRemainingMs(statKey){ return Math.max(0, (state[statKey]||0) - Date.now()); }
+function buyBoost(key){
+  const def = BOOST_DEFS[key];
+  if(state.gems < def.costGems){ toast('No tenés suficientes gemas', '#ff5d5d'); return; }
+  state.gems -= def.costGems;
+  const base = Math.max(Date.now(), state[def.statKey]||0);
+  state[def.statKey] = base + def.duration;
+  toast('⚡ '+def.name+' activado ('+Math.round(def.duration/60000)+' min)', '#ffd23f');
+  markDirty(); updateHUD();
+  if(typeof renderRebirthShop==='function') renderRebirthShop();
+}
 function buyGemUpgrade(){
   const cost = gemUpgradeCost();
   if(state.gems < cost){ toast('No tenés suficientes gemas', '#ff5d5d'); return; }
@@ -1077,21 +1096,35 @@ function updateViewmodel(dt, now, moving){
   const dps = PICKAXES[state.pickaxeTier].dps;
 
   if(isMining){
-    swingPhase += dt * (2.4 + dps*0.14);
+    swingPhase += dt * (1.7 + dps*0.1);
   } else {
-    swingPhase *= 0.9;
+    swingPhase = Math.round(swingPhase); // se asienta en un ciclo completo (posición de reposo)
   }
-  const swing = isMining ? Math.pow(Math.abs(Math.sin(swingPhase*Math.PI)), 0.55) : 0;
+  // Golpe real de picazo, no un vaivén simétrico: caída RÁPIDA hasta el impacto (35% del
+  // ciclo) y luego una vuelta LENTA hasta el amague/preparación (65% restante). swing=1
+  // es el pico levantado atrás (preparación), swing=0 es el impacto hacia adelante.
+  const cycle = isMining ? (swingPhase % 1) : 0;
+  let swing;
+  if(!isMining){
+    swing = 0;
+  } else if(cycle < 0.35){
+    const p = cycle/0.35;
+    swing = 1 - Math.pow(p, 0.5); // caída rápida y con "chasquido" al final
+  } else {
+    const p = (cycle-0.35)/0.65;
+    swing = Math.pow(p, 1.7); // preparación lenta, acelerando hacia el final
+  }
 
   const t = now/1000;
   const idleX = Math.sin(t*1.6)*0.008;
   const idleY = Math.cos(t*1.2)*0.006 + (moving ? Math.abs(Math.sin(t*8))*0.014 : 0);
 
-  pickaxeGroup.rotation.x = basePose.rx - swing*0.85;
-  pickaxeGroup.rotation.z = basePose.rz + swing*0.18;
+  pickaxeGroup.rotation.x = basePose.rx - swing*1.15;
+  pickaxeGroup.rotation.y = basePose.ry - swing*0.22;
+  pickaxeGroup.rotation.z = basePose.rz + swing*0.22;
   pickaxeGroup.position.x = basePose.x + idleX;
-  pickaxeGroup.position.y = basePose.y + idleY - swing*0.1;
-  pickaxeGroup.position.z = basePose.z + swing*0.18;
+  pickaxeGroup.position.y = basePose.y + idleY - swing*0.14;
+  pickaxeGroup.position.z = basePose.z + swing*0.22;
 
   if(appearProgress < 1){
     appearProgress = Math.min(1, appearProgress + dt/0.45);
@@ -1231,7 +1264,7 @@ function breakBlock(k, viaAoe){
   spawnParticles(pos, ORES[type].color);
   addOre(type, 1);
   maybeDropGem(ORES[type]);
-  const luck = petBonuses().luck;
+  const luck = petBonuses().luck + (isBoostActive('luckBoostUntil') ? 0.15 : 0);
   if(luck > 0 && Math.random() < luck){
     addOre(type, 1);
     toast('¡Suerte de mascota! +1 extra', '#ffd23f');
@@ -1278,7 +1311,7 @@ function sellAll(){
   if(total === 0){ toast('No tienes minerales para vender', '#ffb14e'); return; }
   let value = 0;
   for(const t in state.inventory){ value += ORES[t].value * state.inventory[t]; }
-  value = Math.round(value * (state.multiplier + gemMultBonus()) * petBonuses().coinMult * STAGES[state.stage].valueMult);
+  value = Math.round(value * (state.multiplier + gemMultBonus()) * petBonuses().coinMult * STAGES[state.stage].valueMult * (isBoostActive('coinBoostUntil') ? 2 : 1));
   state.coins += value;
   state.inventory = {};
   toast('Vendido por $' + fmt(value), '#ffd23f');
@@ -1557,11 +1590,20 @@ function renderRebirthShop(){
     const row = document.createElement('div');
     row.className = 'shop-row';
     row.innerHTML = '<div class="shop-row-main"><b>'+egg.name+'</b><span>Mejores probabilidades que los huevos de monedas</span></div>';
+    const btnWrap = document.createElement('div');
+    btnWrap.style.display = 'flex';
+    btnWrap.style.gap = '6px';
     const btn = document.createElement('button');
     btn.textContent = '🪙 ' + egg.cost;
     btn.disabled = state.tokens < egg.cost || hatchAnimating;
     btn.onclick = ()=> hatchTokenEgg(egg);
-    row.appendChild(btn);
+    const btn10 = document.createElement('button');
+    btn10.textContent = 'x10';
+    btn10.disabled = state.tokens < egg.cost*10 || hatchAnimating;
+    btn10.onclick = ()=> hatchTokenEggX10(egg);
+    btnWrap.appendChild(btn);
+    btnWrap.appendChild(btn10);
+    row.appendChild(btnWrap);
     rebirthEggList.appendChild(row);
   });
 
@@ -1593,6 +1635,22 @@ function renderRebirthShop(){
     row.appendChild(btn);
     return row;
   })());
+
+  Object.entries(BOOST_DEFS).forEach(([key,def])=>{
+    const active = isBoostActive(def.statKey);
+    const row = document.createElement('div');
+    row.className = 'shop-row' + (active ? ' owned' : '');
+    const remain = boostRemainingMs(def.statKey);
+    const mm = Math.floor(remain/60000), ss = Math.floor((remain%60000)/1000);
+    row.innerHTML = '<div class="shop-row-main"><b>'+def.icon+' '+def.name+'</b><span>'+
+      (active ? 'Activo — quedan '+String(mm).padStart(2,'0')+':'+String(ss).padStart(2,'0') : 'Dura '+Math.round(def.duration/60000)+' minutos')+'</span></div>';
+    const btn = document.createElement('button');
+    btn.textContent = (active ? '+' : '') + '💎 ' + def.costGems;
+    btn.disabled = state.gems < def.costGems;
+    btn.onclick = ()=> buyBoost(key);
+    row.appendChild(btn);
+    gemShopList.appendChild(row);
+  });
 }
 
 function hatchTokenEgg(egg){
@@ -1611,6 +1669,14 @@ function hatchTokenEgg(egg){
   updateHUD();
   renderRebirthShop();
   playHatchAnimation(template, rarity, inst.golden);
+}
+
+function hatchTokenEggX10(egg){
+  if(hatchAnimating) return;
+  const totalCost = egg.cost * 10;
+  if(state.tokens < totalCost){ toast('No tenés suficientes tokens para 10', '#ff5d5d'); return; }
+  state.tokens -= totalCost;
+  hatchBatch(egg, 10);
 }
 
 function tokensForRebirth(){ return 1 + state.stage; } // llegar más lejos en el mapa da más tokens
@@ -1774,6 +1840,42 @@ function hatchEgg(egg){
   playHatchAnimation(template, rarity, inst.golden);
 }
 
+// Abrir x10 de una: salteamos la animación larga (10x sería insoportable) y mostramos
+// un resumen agrupado por rareza, marcando cuántas salieron Doradas.
+function hatchEggX10(egg){
+  if(hatchAnimating) return;
+  if(!stageUnlocked(egg.unlockStage)){ toast('Necesitás explorar '+STAGES[egg.unlockStage].name, '#ffb14e'); return; }
+  const totalCost = egg.cost * 10;
+  if(state.coins < totalCost){ toast('No tienes suficientes monedas para 10', '#ff5d5d'); return; }
+  state.coins -= totalCost;
+  hatchBatch(egg, 10);
+}
+
+function hatchBatch(egg, n){
+  const counts = {};
+  let goldenCount = 0;
+  for(let i=0;i<n;i++){
+    const rarity = weightedPick(egg.table);
+    const candidates = PETS.filter(p=>p.rarity===rarity);
+    const template = candidates[Math.floor(Math.random()*candidates.length)];
+    const inst = makePetInstance(template);
+    state.pets.push(inst);
+    counts[rarity] = (counts[rarity]||0) + 1;
+    if(inst.golden) goldenCount++;
+  }
+  questProgress('hatch', n);
+  state.stats.eggsHatched += n;
+  checkAchievements();
+  markDirty();
+  updateHUD();
+  renderEggs();
+  renderRebirthShop();
+  renderPets();
+  const order = ['mythic','legendary','epic','rare','common'];
+  const parts = order.filter(r=>counts[r]).map(r=> counts[r]+' '+PET_RARITIES[r].name);
+  toast('🎉 x'+n+': '+parts.join(', ')+(goldenCount>0 ? ' · ✨'+goldenCount+' Dorada'+(goldenCount>1?'s':'') : ''), '#ffd23f');
+}
+
 const hatchReveal = document.getElementById('hatchReveal');
 const hatchEggEmoji = document.getElementById('hatchEggEmoji');
 const hatchGlow = document.getElementById('hatchGlow');
@@ -1838,11 +1940,20 @@ function renderEggs(){
     row.className = 'shop-row';
     const unlocked = stageUnlocked(egg.unlockStage);
     row.innerHTML = '<div class="shop-row-main"><b>'+egg.name+'</b><span>'+(unlocked ? '$'+fmt(egg.cost) : 'Requiere '+STAGES[egg.unlockStage].name)+'</span></div>';
+    const btnWrap = document.createElement('div');
+    btnWrap.style.display = 'flex';
+    btnWrap.style.gap = '6px';
     const btn = document.createElement('button');
     btn.textContent = unlocked ? 'Abrir' : 'Bloqueado';
     btn.disabled = !unlocked || state.coins < egg.cost || hatchAnimating;
     btn.onclick = ()=> hatchEgg(egg);
-    row.appendChild(btn);
+    const btn10 = document.createElement('button');
+    btn10.textContent = 'x10';
+    btn10.disabled = !unlocked || state.coins < egg.cost*10 || hatchAnimating;
+    btn10.onclick = ()=> hatchEggX10(egg);
+    btnWrap.appendChild(btn);
+    btnWrap.appendChild(btn10);
+    row.appendChild(btnWrap);
     eggList.appendChild(row);
   });
 }
@@ -1964,6 +2075,8 @@ async function loadProgress(){
   state.gems = state.gems || 0;
   state.gemUpgrades = state.gemUpgrades || 0;
   state.aoeMining = !!state.aoeMining;
+  state.coinBoostUntil = state.coinBoostUntil || 0;
+  state.luckBoostUntil = state.luckBoostUntil || 0;
   state.stats = Object.assign({blocksMined:0, coinsEarned:0, eggsHatched:0, maxStageReached:0}, state.stats||{});
   state.achievementsClaimed = state.achievementsClaimed || {};
   state.redeemedCodes = state.redeemedCodes || {};
@@ -1977,6 +2090,7 @@ async function persistProgress(){
   const payload = JSON.stringify({
     coins: state.coins, rebirths: state.rebirths, multiplier: state.multiplier, tokens: state.tokens,
     gems: state.gems, gemUpgrades: state.gemUpgrades, aoeMining: state.aoeMining,
+    coinBoostUntil: state.coinBoostUntil, luckBoostUntil: state.luckBoostUntil,
     pickaxeTier: state.pickaxeTier, backpackTier: state.backpackTier,
     rebirthPickaxe: state.rebirthPickaxe, rebirthBackpack: state.rebirthBackpack,
     inventory: state.inventory, stage: state.stage,
@@ -2016,14 +2130,27 @@ function buildMinerSkin(suitColor){
   torso.position.y = 0.95;
   group.add(torso);
 
+  // brazos y piernas son pivots (hombro/cadera) con la malla desplazada hacia abajo
+  // adentro de cada pivot, así rotarlos en X los hace "caminar" desde la articulación
+  // real en vez de girar sobre su propio centro geométrico.
+  function makeLimb(geo, mat, pivotY, meshOffsetY, x){
+    const pivot = new THREE.Group();
+    pivot.position.set(x, pivotY, 0);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.y = meshOffsetY;
+    pivot.add(mesh);
+    group.add(pivot);
+    return pivot;
+  }
+
   const legGeo = new THREE.BoxGeometry(0.18,0.55,0.2);
   const legMat = new THREE.MeshStandardMaterial({color:0x2a2420, roughness:0.8});
-  const legL = new THREE.Mesh(legGeo, legMat); legL.position.set(-0.14,0.28,0); group.add(legL);
-  const legR = new THREE.Mesh(legGeo, legMat); legR.position.set(0.14,0.28,0); group.add(legR);
+  const legL = makeLimb(legGeo, legMat, 0.555, -0.275, -0.14);
+  const legR = makeLimb(legGeo, legMat, 0.555, -0.275,  0.14);
 
   const armGeo = new THREE.BoxGeometry(0.15,0.5,0.15);
-  const armL = new THREE.Mesh(armGeo, suitMat); armL.position.set(-0.35,0.95,0); group.add(armL);
-  const armR = new THREE.Mesh(armGeo, suitMat); armR.position.set(0.35,0.95,0); group.add(armR);
+  const armL = makeLimb(armGeo, suitMat, 1.2, -0.25, -0.35);
+  const armR = makeLimb(armGeo, suitMat, 1.2, -0.25,  0.35);
 
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.22,10,10), skinMat);
   head.position.y = 1.5;
@@ -2037,7 +2164,27 @@ function buildMinerSkin(suitColor){
   lamp.position.set(0,1.56,0.24);
   group.add(lamp);
 
+  group.userData.limbs = {legL, legR, armL, armR};
+  group.userData.walkPhase = 0;
   return group;
+}
+
+// Ciclo de caminata procedural: hace oscilar piernas y brazos en fase opuesta
+// (pierna izq. adelante = brazo der. adelante) y los relaja suavemente a la
+// posición neutral apenas el personaje deja de moverse.
+function animateWalk(group, dt, moving, sprinting){
+  const ud = group.userData;
+  if(!ud || !ud.limbs) return;
+  const speedMul = sprinting ? 1.55 : 1;
+  ud.walkPhase = (ud.walkPhase||0) + dt*7.2*speedMul;
+  const amp = moving ? (sprinting ? 0.85 : 0.62) : 0;
+  const target = Math.sin(ud.walkPhase) * amp;
+  const k = 1 - Math.pow(0.0008, dt); // suavizado independiente del framerate
+  const {legL,legR,armL,armR} = ud.limbs;
+  legL.rotation.x += (target - legL.rotation.x) * k;
+  legR.rotation.x += (-target - legR.rotation.x) * k;
+  armL.rotation.x += (-target*0.75 - armL.rotation.x) * k;
+  armR.rotation.x += (target*0.75 - armR.rotation.x) * k;
 }
 
 // mascotas compañeras: cada especie tiene su propia silueta; el color/brillo/escala
@@ -2444,8 +2591,11 @@ function updateAvatars(dt, now){
   const lerpSpeed = Net.mode === 'firebase' ? 10 : 3;
   const t = now/1000;
   otherPlayerAvatars.forEach(av=>{
+    const dx = av.target.x - av.group.position.x, dz = av.target.z - av.group.position.z;
+    const movingOther = Math.hypot(dx,dz) > 0.03;
     av.group.position.lerp(av.target, Math.min(1, dt*lerpSpeed));
     av.group.rotation.y = av.yaw;
+    animateWalk(av.group, dt, movingOther, false);
     updatePetFollowers(av.pets, av.group.position.x, av.group.position.y, av.group.position.z, av.yaw, t);
     av.pets.forEach(f=> f.mesh.visible = av.group.visible);
   });
@@ -2473,6 +2623,22 @@ function updateResetCountdown(){
   const ss = Math.floor((remain%60000)/1000);
   resetCountdownEl.textContent = String(mm).padStart(2,'0') + ':' + String(ss).padStart(2,'0');
   resetBadge.classList.toggle('warn', remain < 60000);
+  updateBoostsHUD();
+}
+
+const boostsRow = document.getElementById('boostsRow');
+function updateBoostsHUD(){
+  if(!boostsRow) return;
+  boostsRow.innerHTML = '';
+  Object.values(BOOST_DEFS).forEach(def=>{
+    if(!isBoostActive(def.statKey)) return;
+    const remain = boostRemainingMs(def.statKey);
+    const mm = Math.floor(remain/60000), ss = Math.floor((remain%60000)/1000);
+    const chip = document.createElement('div');
+    chip.className = 'panel boost-chip';
+    chip.textContent = def.icon+' '+def.name+' '+String(mm).padStart(2,'0')+':'+String(ss).padStart(2,'0');
+    boostsRow.appendChild(chip);
+  });
 }
 
 let resetTimerStarted = false;
@@ -2625,6 +2791,8 @@ window.addEventListener('keydown', (e)=>{
         state.gems = 0;
         state.gemUpgrades = 0;
         state.aoeMining = false;
+        state.coinBoostUntil = 0;
+        state.luckBoostUntil = 0;
         state.rebirthPickaxe = false;
         state.rebirthBackpack = false;
         state.pickaxeTier = 0;
@@ -2733,8 +2901,8 @@ function animate(now){
     targetInfo.classList.remove('show');
     crackOverlay.visible = false;
   }
-
   const moving = keysState.w||keysState.a||keysState.s||keysState.d;
+  if(myAvatar) animateWalk(myAvatar, dt, moving && gameStarted && !isPaused, keysState.shift);
   updateViewmodel(dt, now, moving && gameStarted && !isPaused);
 
   sellIcon.rotation.y += dt*0.8;

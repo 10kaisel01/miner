@@ -14,24 +14,33 @@
 
 <!-- HUD -->
 <div id="hud" class="hidden">
-  <div id="coinsPanel" class="panel">
-    <span class="icon">💰</span>
-    <span class="val mono" id="coinsVal">$0</span>
-    <span class="mult mono" id="multVal">x1</span>
+  <div id="hudTopLeft">
+    <div class="hudRow">
+      <div id="coinsPanel" class="panel">
+        <span class="icon">💰</span>
+        <span class="val mono" id="coinsVal">$0</span>
+        <span class="mult mono" id="multVal">x1</span>
+      </div>
+    </div>
+    <div class="hudRow">
+      <div id="tokensPanel" class="panel">
+        <span class="icon">🪙</span>
+        <span class="val mono" id="tokensVal">0</span>
+      </div>
+      <div id="gemsPanel" class="panel">
+        <span class="icon">💎</span>
+        <span class="val mono" id="gemsVal">0</span>
+      </div>
+    </div>
+    <div class="hudRow">
+      <div id="onlineBadge" class="panel">👥 <span id="onlineCount">1</span></div>
+      <div id="stageBadge" class="panel">🗺️ <span id="stageName">Mina Inicial</span></div>
+      <div id="resetBadge" class="panel">⏳ <span id="resetCountdown">30:00</span></div>
+    </div>
+    <div class="hudRow"><div id="titleBadge" class="panel">🏅 <span id="titleVal">Minero Novato</span></div></div>
+    <div class="hudRow" id="boostsRow"></div>
+    <div class="hudRow"><div id="netStatusBadge" class="panel">🔴 Sin conexión (solo)</div></div>
   </div>
-  <div id="tokensPanel" class="panel">
-    <span class="icon">🪙</span>
-    <span class="val mono" id="tokensVal">0</span>
-  </div>
-  <div id="gemsPanel" class="panel">
-    <span class="icon">💎</span>
-    <span class="val mono" id="gemsVal">0</span>
-  </div>
-  <div id="titleBadge" class="panel">🏅 <span id="titleVal">Minero Novato</span></div>
-  <div id="onlineBadge" class="panel">👥 <span id="onlineCount">1</span></div>
-  <div id="stageBadge" class="panel">🗺️ <span id="stageName">Mina Inicial</span></div>
-  <div id="resetBadge" class="panel">⏳ <span id="resetCountdown">30:00</span></div>
-  <div id="netStatusBadge" class="panel">🔴 Sin conexión (solo)</div>
 
   <div id="questPanel" class="panel">
     <h3>MISIONES DIARIAS</h3>
