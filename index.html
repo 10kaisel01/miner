@@ -42,16 +42,16 @@
     <div class="hudRow"><div id="netStatusBadge" class="panel">🔴 Sin conexión (solo)</div></div>
   </div>
 
-  <div id="questPanel" class="panel">
-    <h3>MISIONES DIARIAS</h3>
-    <div id="questList"></div>
-  </div>
-
   <div id="invPanel" class="panel">
     <h3>MOCHILA <span class="mono" id="invText">0/40</span></h3>
     <div id="invBarWrap"><div id="invBarInner"></div></div>
     <div id="invList"></div>
     <div id="gearLine">⛏️ <b id="pickaxeName">Pico de Madera</b><br>🎒 <b id="backpackName">Saco Básico</b></div>
+  </div>
+
+  <div id="rankingPanel" class="panel">
+    <h3 id="rankingTitle">💰 Monedas</h3>
+    <div id="rankingList"></div>
   </div>
 
   <div id="targetInfo" class="panel">
@@ -77,6 +77,7 @@
     <span><kbd>Shift</kbd>Correr</span>
     <span><kbd>R</kbd>Subir a vender</span>
     <span><kbd>3</kbd>Cambiar cámara</span>
+    <span><kbd>I</kbd>Inventario</span>
   </div>
 </div>
 
@@ -92,14 +93,16 @@
       <li>Cava profundo para encontrar minerales más valiosos</li>
       <li>Ve a la <b style="color:var(--emerald)">Zona de Venta</b> y presiona <kbd>E</kbd> para vender</li>
       <li>Ve a la <b style="color:var(--cyan)">Tienda</b> y presiona <kbd>E</kbd> para mejorar tu pico y mochila</li>
-      <li>Ve al <b style="color:var(--amber)">Portal</b> para viajar entre etapas y ver el ranking</li>
+      <li>Ve al <b style="color:var(--amber)">Portal</b> para viajar entre etapas y ver tus misiones diarias</li>
+      <li>El ranking compartido (monedas, bloques minados, huevos abiertos) se ve siempre abajo a la derecha</li>
       <li>Ve a los <b style="color:var(--pink)">Huevos</b> para conseguir mascotas (equipá hasta 3)</li>
       <li>Junta suficientes monedas y andá a la estación de <b style="color:var(--pink)">Renacer</b> para un multiplicador permanente + Tokens de Renacimiento</li>
       <li>Con los <b style="color:var(--pink)">Tokens</b> comprás equipo permanente y huevos con mejores probabilidades en la Tienda de Renacimiento</li>
       <li>Tus mascotas equipadas ganan experiencia mientras picás y suben de nivel (hasta nivel 10)</li>
-      <li>Completá las <b style="color:var(--emerald)">Misiones diarias</b> del panel de la izquierda para monedas y tokens extra</li>
+      <li>La mina es compartida: si otro jugador rompe un bloque, lo vas a ver roto también</li>
       <li>¿Se te llenó la mochila? Presioná <kbd>R</kbd> para subir directo a la Zona de Venta</li>
       <li>Presioná <kbd>3</kbd> para ver a tu personaje en tercera persona</li>
+      <li>Presioná <kbd>I</kbd> en cualquier momento para ver tu inventario (pico, mochila y mascotas)</li>
     </ul>
     <div class="nameField">
       <label for="nameInput">Tu nombre de minero</label>
@@ -174,9 +177,9 @@
         <div id="stageList"></div>
       </div>
       <div class="shopCol">
-        <h3>Ranking compartido</h3>
-        <div id="rankList"></div>
-        <div class="footnote" style="margin-top:10px;">Se actualiza cada pocos segundos con otros jugadores conectados a este mismo enlace.</div>
+        <h3>📋 Misiones Diarias</h3>
+        <div id="questShopList"></div>
+        <div class="footnote" style="margin-top:10px;">Se completan y pagan solas al llegar al objetivo — no hace falta reclamarlas. El ranking compartido ahora se ve siempre abajo a la derecha.</div>
       </div>
     </div>
     <div class="modalBody" style="grid-template-columns:1fr 1fr;border-top:2px solid var(--border);">
@@ -200,9 +203,19 @@
 <div id="petsModal" class="overlay hidden">
   <div class="modalBox panel">
     <div class="modalHead">
-      <h2>🥚 Huevos y Mascotas</h2>
+      <h2>🎒 Inventario</h2>
       <div class="coins" id="petsCoins">$0</div>
       <button class="closeX" id="petsClose">✕</button>
+    </div>
+    <div class="modalBody" style="grid-template-columns:1fr 1fr;border-bottom:2px solid var(--border);">
+      <div class="shopCol">
+        <h3>Tu pico</h3>
+        <div id="gearPickaxeInfo"></div>
+      </div>
+      <div class="shopCol">
+        <h3>Tu mochila</h3>
+        <div id="gearBackpackInfo"></div>
+      </div>
     </div>
     <div class="modalBody" style="grid-template-columns:1fr 1fr;">
       <div class="shopCol">
@@ -217,6 +230,7 @@
     <div id="hatchReveal" class="hidden">
       <div class="hatch-glow" id="hatchGlow"></div>
       <div class="hatch-egg" id="hatchEggEmoji">🥚</div>
+      <canvas id="hatchPetCanvas" class="hatch-pet-canvas" width="220" height="220"></canvas>
       <div class="hatch-result" id="hatchResult">
         <div class="rar" id="hatchRarity">Rareza</div>
         <div class="nm" id="hatchName">Nombre</div>

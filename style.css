@@ -65,17 +65,9 @@
   #netStatusBadge.net-mid{color:var(--amber);}
   #netStatusBadge.net-off{color:var(--red);}
 
-  #questPanel{
-    position:absolute;bottom:64px;left:16px;width:230px;padding:10px 14px;
-  }
-  #questPanel h3{margin:0 0 8px;font-size:12px;color:var(--emerald);letter-spacing:.5px;}
-  #questList{display:flex;flex-direction:column;gap:8px;}
-  .quest-row{font-size:11.5px;color:var(--text-dim);}
-  .quest-row.done{color:var(--emerald);}
-  .quest-label{display:flex;justify-content:space-between;gap:6px;margin-bottom:3px;}
   .quest-bar-wrap{width:100%;height:6px;border-radius:5px;background:#1a130e;overflow:hidden;border:1px solid var(--border);}
   .quest-bar-inner{height:100%;background:linear-gradient(90deg,var(--emerald),var(--cyan));width:0%;transition:width .2s;}
-  .quest-row.done .quest-bar-inner{background:var(--gold);}
+  .ach-row.done .quest-bar-inner{background:var(--gold);}
 
   .boost-chip{padding:5px 12px;font-size:11.5px;color:var(--gold);font-family:'JetBrains Mono';white-space:nowrap;
     box-shadow:0 0 0 1px rgba(255,210,63,.35) inset, 0 8px 24px rgba(0,0,0,.55);}
@@ -88,6 +80,11 @@
   #invBarInner{height:100%;background:linear-gradient(90deg,var(--emerald),var(--cyan));width:0%;transition:width .2s;}
   #invList{max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;}
   .inv-row{display:flex;align-items:center;gap:8px;font-size:13px;}
+
+  #rankingPanel{
+    position:absolute;bottom:16px;right:16px;width:210px;padding:10px 14px;
+  }
+  #rankingPanel h3{margin:0 0 8px;font-size:12px;color:var(--gold);letter-spacing:.5px;}
   .inv-row .dot{width:10px;height:10px;border-radius:3px;flex-shrink:0;box-shadow:0 0 6px currentColor;}
   .inv-row span{color:var(--text-dim);flex:1;}
   .inv-row b{font-family:'JetBrains Mono';color:var(--text);}
@@ -198,6 +195,11 @@
   }
   .hatch-egg{font-size:76px;animation:hatchShake .12s infinite;position:relative;z-index:1;}
   .hatch-egg.cracking{animation:hatchBurst .4s forwards;}
+  .hatch-pet-canvas{
+    position:absolute;width:190px;height:190px;opacity:0;transform:scale(0.4);
+    pointer-events:none;z-index:1;
+  }
+  .hatch-pet-canvas.show{animation:hatchPop .55s cubic-bezier(.2,1.4,.4,1) forwards;}
   @keyframes hatchShake{
     0%{transform:rotate(-9deg) scale(1);}
     50%{transform:rotate(9deg) scale(1.04);}

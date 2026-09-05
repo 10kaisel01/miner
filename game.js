@@ -111,7 +111,7 @@ function oreWeightsForDepth(oreOrder, depthFrac){
 }
 function pickOreForDepth(oreOrder, layerIndex, mineableLayers){
   const depthFrac = mineableLayers>1 ? layerIndex/(mineableLayers-1) : 0;
-  return weightedPick(oreWeightsForDepth(oreOrder, depthFrac));
+  return weightedPickSeeded(oreWeightsForDepth(oreOrder, depthFrac), worldRng);
 }
 
 // Cada mundo (a partir de Caramelos) aporta DOS niveles propios de pico y mochila,
@@ -236,12 +236,53 @@ function hexStr(n){ return '#'+n.toString(16).padStart(6,'0'); }
 function rand(min,max){ return min + Math.random()*(max-min); }
 function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
 
+// Definido acá arriba (y no más abajo, junto al resto del código de reinicio de mina)
+// porque hace falta ANTES de la primera generación del campo: la mina es compartida
+// por todos los jugadores conectados a la misma etapa+"época" de 30 minutos, así que
+// todos necesitan calcular exactamente la misma semilla desde el primer frame.
+const RESET_INTERVAL_MS = 30*60*1000;
+function currentEpoch(now){ return Math.floor((now||Date.now())/RESET_INTERVAL_MS); }
+function mineId(){ return state.stage + ':' + currentEpoch(); }
+
+// PRNG determinístico (mulberry32): con la misma semilla, genera exactamente la misma
+// secuencia de números en cualquier navegador/cliente. Se usa SOLO para decidir qué
+// mineral va en cada bloque al construir el campo — así todos los jugadores en la
+// misma mina (mismo mineId) ven el mismo mineral en las mismas coordenadas sin
+// necesidad de transmitir el mapa entero; solo sincronizamos qué bloques ya se rompieron.
+// Los huevos y demás tiradas al azar del juego siguen usando Math.random() normal,
+// sin tocar esta semilla.
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function hashSeed(str){
+  let h = 1779033703 ^ str.length;
+  for(let i=0;i<str.length;i++){
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = h<<13 | h>>>19;
+  }
+  return (h ^ h>>>16) >>> 0;
+}
+let worldRng = Math.random;
+function seedWorldRng(seedStr){ worldRng = mulberry32(hashSeed(seedStr)); }
+function weightedPickSeeded(list, rngFn){
+  const total = list.reduce((s,e)=>s+e[1],0);
+  let r = rngFn()*total;
+  for(const [t,w] of list){ if(r<w) return t; r-=w; }
+  return list[list.length-1][0];
+}
+
 /* ======================= STATE ======================= */
 const state = {
   coins:0, rebirths:0, multiplier:1, tokens:0, gems:0, gemUpgrades:0,
   pickaxeTier:0, backpackTier:0,
   rebirthPickaxe:false, rebirthBackpack:false, // gear del renacimiento: comprado con tokens, NO se pierde al renacer
   aoeMining:false, // perk permanente comprado con gemas
+  autoSell:false,  // perk permanente: vende sola apenas la mochila llega al 100%
   coinBoostUntil:0, luckBoostUntil:0, // timestamps (Date.now()) de boosts temporales activos
   inventory:{},
   stage:0,
@@ -286,6 +327,7 @@ function maybeDropGem(oreInfo){
 function gemUpgradeCost(){ return 5 + Math.round(5*Math.pow(1.35, state.gemUpgrades)); }
 function gemMultBonus(){ return state.gemUpgrades * 0.02; }
 const AOE_MINING_COST = 60;
+const AUTO_SELL_COST = 80;
 
 /* ---------- boosts temporales (comprados con gemas, se pueden extender comprando de nuevo) ---------- */
 const BOOST_DEFS = {
@@ -537,6 +579,10 @@ addTorch(-5.5, 1.6, -5.5, 0xffb14e, true);
 
 /* ======================= WORLD ======================= */
 const blocks = new Map();      // key -> {mesh, type, health}
+// bloques ya sincronizados como "rotos" (propios o de otro jugador) para esta mina
+// compartida — evita reprocesar el mismo evento de red dos veces. Se limpia cada vez
+// que se genera una mina nueva (regenerateField / cambio de mineId).
+const knownBroken = new Set();
 const groundSet = new Set();
 const blockGroup = new THREE.Group();
 scene.add(blockGroup);
@@ -629,6 +675,7 @@ function updateCrackOverlay(hit){
 }
 
 function buildField(){
+  seedWorldRng(mineId()); // misma mina = misma semilla para todos los que están acá
   const oreOrder = STAGES[state.stage].oreOrder;
   const mineableLayers = FIELD_DEPTH - 1; // la última capa es roca madre, no entra en el sorteo
   for(let x=-FIELD_R; x<=FIELD_R; x++){
@@ -648,7 +695,9 @@ function regenerateField(){
     blockGroup.remove(blockGroup.children[0]);
   }
   blocks.clear();
+  knownBroken.clear();
   buildField();
+  attachMineSync();
 }
 
 let groundMat = null;
@@ -1261,6 +1310,8 @@ function breakBlock(k, viaAoe){
   const type = entry.type;
   blockGroup.remove(entry.mesh);
   blocks.delete(k);
+  knownBroken.add(k);
+  reportBlockBroken(k);
   spawnParticles(pos, ORES[type].color);
   addOre(type, 1);
   maybeDropGem(ORES[type]);
@@ -1296,13 +1347,20 @@ function addOre(type, n){
   const total = Object.values(state.inventory).reduce((a,b)=>a+b,0);
   const cap = effectiveCapacity();
   const room = cap - total;
-  const add = Math.min(n, Math.max(room,0));
-  if(add <= 0){
+  if(room <= 0){
+    if(state.autoSell){ sellAll(); addOre(type, n); return; }
     toast('¡Mochila llena!', '#ff5d5d');
     return;
   }
+  const add = Math.min(n, room);
   state.inventory[type] = (state.inventory[type]||0) + add;
   toast('+' + add + ' ' + ORES[type].name, hexStr(ORES[type].color));
+  const remainder = n - add;
+  if(state.autoSell && (remainder > 0 || total + add >= cap)){
+    sellAll();
+    if(remainder > 0) addOre(type, remainder);
+    return;
+  }
   updateHUD();
 }
 
@@ -1464,24 +1522,29 @@ function updateHUD(){
   });
 
   if(shopOpenFlag) renderShop();
-  if(petsOpenFlag) renderPets();
+  if(petsOpenFlag){ renderPets(); renderGearInfo(); }
   renderQuests();
+  renderRankingWidget();
 }
 
 /* ---------- misiones diarias (panel HUD, sin necesidad de abrir un modal) ---------- */
-const questPanel = document.getElementById('questPanel');
-const questList = document.getElementById('questList');
+const questShopList = document.getElementById('questShopList');
 function renderQuests(){
-  if(!questPanel) return;
+  if(!questShopList) return;
   ensureQuests();
-  questList.innerHTML = '';
+  questShopList.innerHTML = '';
   state.quests.list.forEach(q=>{
     const pct = Math.min(100, Math.round(100*q.progress/q.target));
+    const rewardParts = [];
+    if(q.rewardCoins) rewardParts.push('+$'+fmt(q.rewardCoins));
+    if(q.rewardTokens) rewardParts.push('+'+q.rewardTokens+' 🪙');
     const row = document.createElement('div');
-    row.className = 'quest-row' + (q.done ? ' done' : '');
-    row.innerHTML = '<div class="quest-label">'+(q.done?'✅ ':'')+q.label+' <span class="mono">'+Math.min(q.progress,q.target)+'/'+q.target+'</span></div>'+
-      '<div class="quest-bar-wrap"><div class="quest-bar-inner" style="width:'+pct+'%"></div></div>';
-    questList.appendChild(row);
+    row.className = 'ach-row' + (q.done ? ' done' : '');
+    row.innerHTML = '<span class="ach-icon">'+(q.done?'✅':'📋')+'</span>'+
+      '<div class="ach-main"><span>'+q.label+' <span class="mono" style="color:var(--text-dim);">'+Math.min(q.progress,q.target)+'/'+q.target+'</span></span>'+
+      '<span class="ach-reward">'+rewardParts.join(', ')+'</span>'+
+      '<div class="quest-bar-wrap" style="margin-top:5px;"><div class="quest-bar-inner" style="width:'+pct+'%"></div></div></div>';
+    questShopList.appendChild(row);
   });
 }
 
@@ -1563,7 +1626,13 @@ const rebirthThreshInfo = document.getElementById('rebirthThreshInfo');
 
 function renderRebirthShop(){
   rebirthTokensEl.textContent = '🪙 ' + fmt(state.tokens);
-  rebirthThreshInfo.textContent = 'Con este renacimiento vas a ganar '+tokensForRebirth()+' 🪙 Token'+(tokensForRebirth()===1?'':'s')+' de Renacimiento.';
+  const ready = canRebirth();
+  rebirthThreshInfo.textContent = ready
+    ? 'Con este renacimiento vas a ganar '+tokensForRebirth()+' 🪙 Token'+(tokensForRebirth()===1?'':'s')+' de Renacimiento.'
+    : 'Necesitás $'+fmt(rebirthThreshold())+' para renacer (te faltan $'+fmt(rebirthThreshold()-state.coins)+').';
+  const confirmBtn = document.getElementById('rebirthConfirm');
+  confirmBtn.disabled = !ready;
+  confirmBtn.textContent = ready ? 'Renacer ahora' : 'Todavía no tenés suficiente';
 
   rebirthGearList.innerHTML = '';
   [['pickaxe','rebirthPickaxe'], ['backpack','rebirthBackpack']].forEach(([key,flag])=>{
@@ -1636,6 +1705,23 @@ function renderRebirthShop(){
     return row;
   })());
 
+  gemShopList.appendChild((()=>{
+    const row = document.createElement('div');
+    row.className = 'shop-row' + (state.autoSell ? ' owned' : '');
+    row.innerHTML = '<div class="shop-row-main"><b>Auto-Vendedor</b><span>Vende sola apenas la mochila llega al 100%, sin que tengas que subir a la Zona de Venta</span></div>';
+    const btn = document.createElement('button');
+    btn.textContent = state.autoSell ? 'Adquirido' : '💎 ' + AUTO_SELL_COST;
+    btn.disabled = state.autoSell || state.gems < AUTO_SELL_COST;
+    btn.onclick = ()=>{
+      state.gems -= AUTO_SELL_COST;
+      state.autoSell = true;
+      toast('📦 ¡Auto-Vendedor activado permanentemente!', '#6fe7ff');
+      markDirty(); updateHUD(); renderRebirthShop();
+    };
+    row.appendChild(btn);
+    return row;
+  })());
+
   Object.entries(BOOST_DEFS).forEach(([key,def])=>{
     const active = isBoostActive(def.statKey);
     const row = document.createElement('div');
@@ -1681,7 +1767,6 @@ function hatchTokenEggX10(egg){
 
 function tokensForRebirth(){ return 1 + state.stage; } // llegar más lejos en el mapa da más tokens
 function openRebirth(){
-  if(!canRebirth()){ toast('Necesitas $'+fmt(rebirthThreshold())+' para renacer', '#ffb14e'); return; }
   rebirthOpenFlag = true;
   isPaused = true;
   isMining = false;
@@ -1697,6 +1782,7 @@ function closeRebirth(){
 }
 document.getElementById('rebirthCancel').onclick = closeRebirth;
 document.getElementById('rebirthConfirm').onclick = ()=>{
+  if(!canRebirth()){ toast('Necesitás $'+fmt(rebirthThreshold())+' para renacer', '#ffb14e'); return; }
   const tokensEarned = tokensForRebirth();
   state.rebirths += 1;
   state.multiplier = +(1 + state.rebirths*0.25).toFixed(2);
@@ -1714,10 +1800,41 @@ document.getElementById('rebirthConfirm').onclick = ()=>{
   closeRebirth();
 };
 
+/* ---------- ranking persistente (abajo a la derecha, 3 categorías rotando) ---------- */
+const RANK_CATEGORIES = [
+  {key:'coins',  label:'💰 Monedas',         getter:d=>d.coins||0,       fmt:v=>'$'+fmt(v)},
+  {key:'blocks', label:'⛏️ Bloques minados', getter:d=>d.blocksMined||0, fmt:v=>fmt(v)},
+  {key:'eggs',   label:'🥚 Huevos abiertos', getter:d=>d.eggsHatched||0, fmt:v=>fmt(v)},
+];
+let rankingCatIdx = 0;
+const rankingPanel = document.getElementById('rankingPanel');
+const rankingTitle = document.getElementById('rankingTitle');
+const rankingList = document.getElementById('rankingList');
+function renderRankingWidget(){
+  if(!rankingPanel) return;
+  const cat = RANK_CATEGORIES[rankingCatIdx];
+  rankingTitle.textContent = cat.label;
+  const mine = {coins: state.coins, blocksMined: state.stats.blocksMined, eggsHatched: state.stats.eggsHatched};
+  const rows = [{name: myProfile.name+' (vos)', val: cat.getter(mine), mine:true}];
+  otherPlayersData.forEach(d=> rows.push({name: d.name, val: cat.getter(d), mine:false}));
+  rows.sort((a,b)=> b.val - a.val);
+  rankingList.innerHTML = '';
+  rows.slice(0,5).forEach((r,i)=>{
+    const row = document.createElement('div');
+    row.className = 'rank-row' + (r.mine ? ' me' : '');
+    row.innerHTML = '<span class="pos">#'+(i+1)+'</span><span class="who">'+r.name+'</span><span class="amt">'+cat.fmt(r.val)+'</span>';
+    rankingList.appendChild(row);
+  });
+}
+function cycleRankingCategory(){
+  rankingCatIdx = (rankingCatIdx+1) % RANK_CATEGORIES.length;
+  renderRankingWidget();
+}
+setInterval(cycleRankingCategory, 5000);
+
 /* ---------- stages / portal modal ---------- */
 const stagesModal = document.getElementById('stagesModal');
 const stageList = document.getElementById('stageList');
-const rankList = document.getElementById('rankList');
 
 function renderStages(){
   stageList.innerHTML = '';
@@ -1744,32 +1861,13 @@ function renderStages(){
   });
 }
 
-function renderRanking(){
-  rankList.innerHTML = '';
-  const rows = [{name: myProfile.name+' (vos)', coins: state.coins, mine:true}];
-  otherPlayersData.forEach(d=> rows.push({name: d.name, coins: d.coins||0, mine:false}));
-  rows.sort((a,b)=> b.coins - a.coins);
-  rows.slice(0,8).forEach((r,i)=>{
-    const row = document.createElement('div');
-    row.className = 'rank-row' + (r.mine ? ' me' : '');
-    row.innerHTML = '<span class="pos">#'+(i+1)+'</span><span class="who">'+r.name+'</span><span class="amt">$'+fmt(r.coins)+'</span>';
-    rankList.appendChild(row);
-  });
-  if(rows.length===1){
-    const note = document.createElement('div');
-    note.className = 'footnote';
-    note.textContent = 'Todavía no hay otros jugadores conectados a este enlace.';
-    rankList.appendChild(note);
-  }
-}
-
 function openStages(){
   stagesOpenFlag = true;
   isPaused = true;
   isMining = false;
   releaseLook();
   renderStages();
-  renderRanking();
+  renderQuests();
   renderAchievements();
   stagesModal.classList.remove('hidden');
 }
@@ -1882,6 +1980,49 @@ const hatchGlow = document.getElementById('hatchGlow');
 const hatchResult = document.getElementById('hatchResult');
 const hatchRarity = document.getElementById('hatchRarity');
 const hatchName = document.getElementById('hatchName');
+const hatchPetCanvas = document.getElementById('hatchPetCanvas');
+
+// Mini escena 3D aparte (propio renderer/cámara/luces) solo para mostrar en el centro
+// del brillo, girando, la mascota 3D real que te tocó — reutiliza el mismo modelo
+// exacto (buildPetFollowerMesh) que ves siguiéndote en el mundo, no un ícono aparte.
+let hatchPetRenderer=null, hatchPetScene=null, hatchPetCamera=null, hatchPetMesh=null, hatchPetRAF=null;
+function ensureHatchPetRenderer(){
+  if(hatchPetRenderer) return;
+  hatchPetRenderer = new THREE.WebGLRenderer({canvas:hatchPetCanvas, alpha:true, antialias:true});
+  hatchPetRenderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+  hatchPetRenderer.setSize(220, 220, false);
+  hatchPetScene = new THREE.Scene();
+  hatchPetCamera = new THREE.PerspectiveCamera(32, 1, 0.05, 10);
+  hatchPetCamera.position.set(0, 0.18, 1.7);
+  hatchPetCamera.lookAt(0, 0.05, 0);
+  hatchPetScene.add(new THREE.AmbientLight(0xffffff, 0.7));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.95);
+  dir.position.set(1.5, 2.2, 2);
+  hatchPetScene.add(dir);
+  const rim = new THREE.DirectionalLight(0xaad4ff, 0.4);
+  rim.position.set(-1.5, 0.6, -1.5);
+  hatchPetScene.add(rim);
+}
+function showHatchPetModel(template, rarity, golden){
+  ensureHatchPetRenderer();
+  if(hatchPetMesh) hatchPetScene.remove(hatchPetMesh);
+  hatchPetMesh = buildPetFollowerMesh(template.id, rarity, golden);
+  hatchPetMesh.position.set(0, -0.05, 0);
+  hatchPetScene.add(hatchPetMesh);
+  if(hatchPetRAF) cancelAnimationFrame(hatchPetRAF);
+  const tick = ()=>{
+    if(hatchPetMesh){
+      hatchPetMesh.rotation.y += 0.022;
+      hatchPetMesh.position.y = -0.05 + Math.sin(performance.now()/420)*0.03;
+    }
+    hatchPetRenderer.render(hatchPetScene, hatchPetCamera);
+    hatchPetRAF = requestAnimationFrame(tick);
+  };
+  tick();
+}
+function hideHatchPetModel(){
+  if(hatchPetRAF){ cancelAnimationFrame(hatchPetRAF); hatchPetRAF = null; }
+}
 
 function playHatchAnimation(template, rarity, golden){
   hatchAnimating = true;
@@ -1893,6 +2034,7 @@ function playHatchAnimation(template, rarity, golden){
   hatchEggEmoji.textContent = '🥚';
   hatchGlow.className = 'hatch-glow';
   hatchGlow.style.background = 'radial-gradient(circle, '+hexStr(color)+' 0%, transparent 72%)';
+  hatchPetCanvas.className = 'hatch-pet-canvas';
   hatchResult.className = 'hatch-result';
   hatchRarity.textContent = golden ? '✨ '+info.name+' DORADA ✨' : info.name;
   hatchRarity.style.color = hexStr(color);
@@ -1904,11 +2046,14 @@ function playHatchAnimation(template, rarity, golden){
     hatchGlow.classList.add('show');
   }, 850);
   setTimeout(()=>{
+    showHatchPetModel(template, rarity, golden);
+    hatchPetCanvas.classList.add('show');
     hatchResult.classList.add('show');
     toast((golden?'✨ ¡DORADA! ':'¡')+'Obtuviste a '+template.name+'! ('+info.name+')', hexStr(color));
   }, 1150);
   setTimeout(()=>{
     hatchReveal.classList.add('hidden');
+    hideHatchPetModel();
     hatchAnimating = false;
     renderEggs();
     renderPets();
@@ -1958,6 +2103,24 @@ function renderEggs(){
   });
 }
 
+const gearPickaxeInfo = document.getElementById('gearPickaxeInfo');
+const gearBackpackInfo = document.getElementById('gearBackpackInfo');
+function renderGearInfo(){
+  const p = PICKAXES[state.pickaxeTier];
+  const b = BACKPACKS[state.backpackTier];
+  const nextP = PICKAXES[state.pickaxeTier+1];
+  const nextB = BACKPACKS[state.backpackTier+1];
+  gearPickaxeInfo.innerHTML =
+    '<div class="shop-row owned"><div class="shop-row-main"><b>⛏️ '+p.name+(state.rebirthPickaxe?' +👑':'')+'</b>'+
+    '<span>Daño: '+effectiveDps().toFixed(1)+' /seg'+(state.rebirthPickaxe?' (incluye +20% de la Corona)':'')+'</span>'+
+    '<span>Dureza máxima que puede picar: '+p.maxHardness+'</span></div></div>'+
+    (nextP ? '<div class="footnote" style="margin-top:8px;">Siguiente: <b>'+nextP.name+'</b> por $'+fmt(nextP.cost)+' en la Tienda.</div>' : '<div class="footnote" style="margin-top:8px;">¡Ya tenés el pico más alto del juego!</div>');
+  gearBackpackInfo.innerHTML =
+    '<div class="shop-row owned"><div class="shop-row-main"><b>🎒 '+b.name+(state.rebirthBackpack?' +👑':'')+'</b>'+
+    '<span>Capacidad total: '+effectiveCapacity()+(state.rebirthBackpack?' (incluye +2.000 de la Corona)':'')+'</span></div></div>'+
+    (nextB ? '<div class="footnote" style="margin-top:8px;">Siguiente: <b>'+nextB.name+'</b> por $'+fmt(nextB.cost)+' en la Tienda.</div>' : '<div class="footnote" style="margin-top:8px;">¡Ya tenés la mochila más grande del juego!</div>');
+}
+
 function renderPets(){
   petSlotCount.textContent = '('+state.equippedPets.length+'/'+MAX_EQUIPPED_PETS+' equipadas)';
   petList.innerHTML = '';
@@ -1997,6 +2160,7 @@ function openPets(){
   isPaused = true;
   isMining = false;
   releaseLook();
+  renderGearInfo();
   renderEggs();
   renderPets();
   petsModal.classList.remove('hidden');
@@ -2075,6 +2239,7 @@ async function loadProgress(){
   state.gems = state.gems || 0;
   state.gemUpgrades = state.gemUpgrades || 0;
   state.aoeMining = !!state.aoeMining;
+  state.autoSell = !!state.autoSell;
   state.coinBoostUntil = state.coinBoostUntil || 0;
   state.luckBoostUntil = state.luckBoostUntil || 0;
   state.stats = Object.assign({blocksMined:0, coinsEarned:0, eggsHatched:0, maxStageReached:0}, state.stats||{});
@@ -2089,7 +2254,7 @@ async function persistProgress(){
   progressDirty = false;
   const payload = JSON.stringify({
     coins: state.coins, rebirths: state.rebirths, multiplier: state.multiplier, tokens: state.tokens,
-    gems: state.gems, gemUpgrades: state.gemUpgrades, aoeMining: state.aoeMining,
+    gems: state.gems, gemUpgrades: state.gemUpgrades, aoeMining: state.aoeMining, autoSell: state.autoSell,
     coinBoostUntil: state.coinBoostUntil, luckBoostUntil: state.luckBoostUntil,
     pickaxeTier: state.pickaxeTier, backpackTier: state.backpackTier,
     rebirthPickaxe: state.rebirthPickaxe, rebirthBackpack: state.rebirthBackpack,
@@ -2410,7 +2575,7 @@ function upsertOtherPlayer(id, data){
     rebuildPetFollowers(av.pets, scene, data.pets);
   }
   onlineCountEl.textContent = 1 + otherPlayersData.size;
-  if(stagesOpenFlag) renderRanking();
+  renderRankingWidget();
 }
 function removeOtherPlayer(id){
   const av = otherPlayerAvatars.get(id);
@@ -2421,11 +2586,11 @@ function removeOtherPlayer(id){
   }
   otherPlayersData.delete(id);
   onlineCountEl.textContent = 1 + otherPlayersData.size;
-  if(stagesOpenFlag) renderRanking();
+  renderRankingWidget();
 }
 
 /* ---------- adaptador de red ---------- */
-const Net = { mode:'offline', _myRef:null, _onUpdate:null, _onRemove:null };
+const Net = { mode:'offline', _myRef:null, _onUpdate:null, _onRemove:null, _db:null };
 Net.onUpdate = function(cb){ Net._onUpdate = cb; };
 Net.onRemove = function(cb){ Net._onRemove = cb; };
 
@@ -2449,6 +2614,7 @@ async function initNet(){
     try{
       firebase.initializeApp(FIREBASE_CONFIG);
       const db = firebase.database();
+      Net._db = db;
       const myRef = db.ref('players/'+myProfile.id);
       myRef.onDisconnect().remove().catch(()=>{});
       const playersRef = db.ref('players');
@@ -2508,11 +2674,96 @@ function reportNetError(context, err){
   }
 }
 
+/* ---------- mina compartida: sincroniza qué bloques ya rompió cada jugador ---------- */
+// El layout (qué mineral hay en cada coordenada) ya es idéntico para todos gracias a
+// la semilla determinística (mineId → worldRng). Acá solo viaja "este bloque ya no
+// existe", nunca el mapa completo — así que el tráfico de red es mínimo incluso con
+// muchos jugadores picando la misma mina al mismo tiempo.
+let currentMineId = null;
+let minesBrokenRef = null;      // ref de Firebase (solo en modo 'firebase')
+let pendingBrokenKeys = new Set(); // cola de bloques rotos localmente, para el modo 'storage'
+
+// Aplica un bloque roto que vino de la red (propio o ajeno): solo lo saca de la
+// escena, SIN dar mineral/XP/misión — el que se lo ganó ya lo cobró en su cliente.
+function removeBlockForSync(k){
+  if(knownBroken.has(k)) return;
+  knownBroken.add(k);
+  const entry = blocks.get(k);
+  if(!entry) return; // ya no está localmente (lo rompimos nosotros, o llegó dos veces)
+  blockGroup.remove(entry.mesh);
+  blocks.delete(k);
+}
+
+function reportBlockBroken(k){
+  if(Net.mode === 'firebase' && Net._db){
+    Net._db.ref('mines/'+mineId()+'/broken/'+k).set(true).catch(()=>{});
+  } else if(Net.mode === 'storage'){
+    pendingBrokenKeys.add(k);
+  }
+}
+
+function detachMineSync(){
+  if(minesBrokenRef){ minesBrokenRef.off(); minesBrokenRef = null; }
+}
+
+// Se llama cada vez que se genera un campo nuevo (juego recién cargado, viaje entre
+// mundos, o el reinicio de mina cada 30min): (re)conecta el listener de Firebase a la
+// mina que corresponde AHORA, y aplica de una todo lo que ya rompieron otros jugadores
+// que llegaron antes que vos a esta misma mina.
+function attachMineSync(){
+  const id = mineId();
+  if(id === currentMineId && (Net.mode !== 'firebase' || minesBrokenRef)) return;
+  detachMineSync();
+  currentMineId = id;
+  pendingBrokenKeys = new Set();
+  if(Net.mode === 'firebase' && Net._db){
+    minesBrokenRef = Net._db.ref('mines/'+id+'/broken');
+    minesBrokenRef.once('value').then(snap=>{
+      const val = snap.val() || {};
+      Object.keys(val).forEach(k => removeBlockForSync(k));
+    }).catch(err => reportNetError('lectura de mina compartida', err));
+    minesBrokenRef.on('child_added', snap => removeBlockForSync(snap.key));
+  } else if(Net.mode === 'storage'){
+    pollMineBroken();
+  }
+}
+
+async function pollMineBroken(){
+  if(Net.mode !== 'storage') return;
+  const id = mineId();
+  try{
+    const r = await window.storage.get('minebroken:'+id, true);
+    if(r && r.value){
+      const arr = JSON.parse(r.value);
+      arr.forEach(k => removeBlockForSync(k));
+    }
+  }catch(e){ /* todavía no hay nada guardado para esta mina, es normal */ }
+}
+
+async function flushBrokenBlocks(){
+  if(Net.mode !== 'storage' || pendingBrokenKeys.size === 0) return;
+  const id = mineId();
+  const toSend = Array.from(pendingBrokenKeys);
+  pendingBrokenKeys = new Set();
+  try{
+    let arr = [];
+    try{
+      const r = await window.storage.get('minebroken:'+id, true);
+      if(r && r.value) arr = JSON.parse(r.value);
+    }catch(e){ /* todavía no existe, arrancamos de una lista vacía */ }
+    const merged = Array.from(new Set([...arr, ...toSend]));
+    await window.storage.set('minebroken:'+id, JSON.stringify(merged), true);
+  }catch(e){
+    toSend.forEach(k => pendingBrokenKeys.add(k)); // reintentamos en el próximo ciclo
+  }
+}
+
 function netBroadcast(){
   if(!gameStarted) return;
   const data = {
     name: myProfile.name, x:player.x, y:player.y, z:player.z, yaw:yaw,
     stage: state.stage, coins: state.coins, rebirths: state.rebirths,
+    blocksMined: state.stats.blocksMined, eggsHatched: state.stats.eggsHatched,
     pets: state.equippedPets.map(uid=>{
       const p = state.pets.find(pp=>pp.uid===uid);
       return p ? {id:p.id, rarity:p.rarity, golden:!!p.golden} : null;
@@ -2568,12 +2819,16 @@ async function startPresenceLoop(){
   Net.onUpdate((id, data)=> upsertOtherPlayer(id, data));
   Net.onRemove((id)=> removeOtherPlayer(id));
   await initNet();
+  attachMineSync(); // recién ahora hay conexión: aplica lo que otros ya rompieron acá
   netBroadcast();
   const sendInterval = Net.mode === 'firebase' ? 150 : 2500;
   setInterval(netBroadcast, sendInterval);
   if(Net.mode === 'storage'){
     netPollStorage();
+    pollMineBroken();
     setInterval(netPollStorage, 2500);
+    setInterval(pollMineBroken, 2500);
+    setInterval(flushBrokenBlocks, 2500);
   }
   setInterval(sweepStalePlayers, 5000);
 }
@@ -2605,7 +2860,6 @@ function updateAvatars(dt, now){
 /* ======================= REINICIO PERIÓDICO DE LA MINA ======================= */
 // Cada 30 minutos (alineado al reloj real, sin necesitar red) la mina activa
 // se regenera por completo y los jugadores son teletransportados a la superficie.
-const RESET_INTERVAL_MS = 30*60*1000;
 function nextResetBoundary(now){ return Math.ceil(now/RESET_INTERVAL_MS)*RESET_INTERVAL_MS; }
 let nextResetAt = nextResetBoundary(Date.now());
 
@@ -2773,16 +3027,19 @@ window.addEventListener('keydown', (e)=>{
     cameraMode = (cameraMode==='first') ? 'third' : 'first';
     toast(cameraMode==='third' ? '📷 Cámara en tercera persona' : '📷 Cámara en primera persona', '#6fe7ff');
   }
+  if(k==='i' && !e.repeat && gameStarted && !isPaused){
+    openPets(); // inventario (equipo + mascotas) accesible desde cualquier lado, no solo junto a los Huevos
+  }
   if(gameStarted && !isPaused && e.key.length===1){
     cheatBuffer = (cheatBuffer + e.key.toLowerCase()).slice(-CHEAT_CODE.length);
     if(cheatBuffer === CHEAT_CODE){
       cheatBuffer = '';
       if(!godModeToggled){
-        state.coins += 1000000;
+        state.coins += 1000000000;
         godModeToggled = true;
         markDirty();
         updateHUD();
-        toast('✨ ¡MODO DIOS ACTIVADO! +$1.000.000', '#ffd23f');
+        toast('✨ ¡MODO DIOS ACTIVADO! +$1.000.000.000', '#ffd23f');
       } else {
         state.coins = 0;
         state.rebirths = 0;
@@ -2791,6 +3048,7 @@ window.addEventListener('keydown', (e)=>{
         state.gems = 0;
         state.gemUpgrades = 0;
         state.aoeMining = false;
+        state.autoSell = false;
         state.coinBoostUntil = 0;
         state.luckBoostUntil = 0;
         state.rebirthPickaxe = false;
