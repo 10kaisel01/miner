@@ -471,7 +471,7 @@ function gainPetXP(uid, amount){
   }
   if(leveledUp){
     toast('⭐ '+p.name+' subió a nivel '+p.level+'!', '#ffd23f');
-    if(petsOpenFlag) renderPets();
+    if(inventoryOpenFlag) renderPets();
   }
 }
 
@@ -1233,7 +1233,8 @@ let isMining = false;
 let shopOpenFlag = false;
 let rebirthOpenFlag = false;
 let stagesOpenFlag = false;
-let petsOpenFlag = false;
+let inventoryOpenFlag = false;
+let eggsOpenFlag = false;
 let cameraMode = 'first'; // 'first' | 'third'
 let myAvatar = null;
 
@@ -1552,7 +1553,8 @@ function updateHUD(){
   });
 
   if(shopOpenFlag) renderShop();
-  if(petsOpenFlag){ renderPets(); renderGearInfo(); }
+  if(inventoryOpenFlag){ renderPets(); renderGearInfo(); renderInvModalOres(); invModalCoins.textContent='$'+fmt(state.coins); }
+  if(eggsOpenFlag){ renderEggs(); }
   renderQuests();
   renderRankingWidget();
 }
@@ -1592,6 +1594,10 @@ function stageUnlocked(unlockStage){
   return state.rebirths >= STAGES[unlockStage].unlockRebirths;
 }
 
+// íconos por tier, compartidos entre picos y mochilas (mismo tema por etapa)
+const TIER_ICONS = ['🪵','🪨','⚙️','🥇','💎','🔮','🍬','🍭','🖤','🌋','🌌','🌑','❄️','🧊'];
+const EGG_ICONS = {common:'🥚', rare:'🐣', epic:'🌟', mythic:'💠', candy:'🍭', volcano:'🌋', void:'🌌', frozen:'❄️', tk_legendary:'💠', tk_mythic:'👑'};
+
 function renderShop(){
   shopCoins.textContent = '$' + fmt(state.coins);
 
@@ -1600,7 +1606,7 @@ function renderShop(){
     const row = document.createElement('div');
     row.className = 'shop-row' + (i===state.pickaxeTier ? ' owned':'');
     const unlocked = stageUnlocked(p.unlockStage);
-    row.innerHTML = '<div class="shop-row-main"><b>'+p.name+'</b><span>'+p.dps.toFixed(1)+' golpes/seg · pica: '+oresAtHardness(p.maxHardness)+'</span></div>';
+    row.innerHTML = '<div class="shop-row-main"><b>'+(TIER_ICONS[i]||'⛏️')+' '+p.name+'</b><span>'+p.dps.toFixed(1)+' golpes/seg · pica: '+oresAtHardness(p.maxHardness)+'</span></div>';
     const btn = document.createElement('button');
     if(i < state.pickaxeTier) btn.textContent = 'Superado';
     else if(i === state.pickaxeTier) btn.textContent = 'Equipado';
@@ -1617,7 +1623,7 @@ function renderShop(){
     const row = document.createElement('div');
     row.className = 'shop-row' + (i===state.backpackTier ? ' owned':'');
     const unlocked = stageUnlocked(b.unlockStage);
-    row.innerHTML = '<div class="shop-row-main"><b>'+b.name+'</b><span>Capacidad '+b.cap+'</span></div>';
+    row.innerHTML = '<div class="shop-row-main"><b>'+(TIER_ICONS[i]||'🎒')+' '+b.name+'</b><span>Capacidad '+b.cap+'</span></div>';
     const btn = document.createElement('button');
     if(i < state.backpackTier) btn.textContent = 'Superado';
     else if(i === state.backpackTier) btn.textContent = 'Equipado';
@@ -1688,7 +1694,7 @@ function renderRebirthShop(){
   TOKEN_EGGS.forEach(egg=>{
     const row = document.createElement('div');
     row.className = 'shop-row';
-    row.innerHTML = '<div class="shop-row-main"><b>'+egg.name+'</b><span>Mejores probabilidades que los huevos de monedas</span></div>';
+    row.innerHTML = '<div class="shop-row-main"><b>'+(EGG_ICONS[egg.id]||'🥚')+' '+egg.name+'</b><span>Mejores probabilidades que los huevos de monedas</span></div>';
     const btnWrap = document.createElement('div');
     btnWrap.style.display = 'flex';
     btnWrap.style.gap = '6px';
@@ -1943,8 +1949,6 @@ codeInput.addEventListener('keydown', e=>{
 });
 
 /* ---------- eggs / pets modal ---------- */
-const petsModal = document.getElementById('petsModal');
-const petsCoins = document.getElementById('petsCoins');
 const eggList = document.getElementById('eggList');
 const petList = document.getElementById('petList');
 const petSlotCount = document.getElementById('petSlotCount');
@@ -2108,13 +2112,13 @@ function togglePetEquip(uid){
 }
 
 function renderEggs(){
-  petsCoins.textContent = '$' + fmt(state.coins);
+  eggsCoinsEl.textContent = '$' + fmt(state.coins);
   eggList.innerHTML = '';
   EGGS.forEach(egg=>{
     const row = document.createElement('div');
     row.className = 'shop-row';
     const unlocked = stageUnlocked(egg.unlockStage);
-    row.innerHTML = '<div class="shop-row-main"><b>'+egg.name+'</b><span>'+(unlocked ? '$'+fmt(egg.cost) : 'Requiere '+STAGES[egg.unlockStage].name)+'</span></div>';
+    row.innerHTML = '<div class="shop-row-main"><b>'+(EGG_ICONS[egg.id]||'🥚')+' '+egg.name+'</b><span>'+(unlocked ? '$'+fmt(egg.cost) : 'Requiere '+STAGES[egg.unlockStage].name)+'</span></div>';
     const btnWrap = document.createElement('div');
     btnWrap.style.display = 'flex';
     btnWrap.style.gap = '6px';
@@ -2196,25 +2200,84 @@ function renderPets(){
   });
 }
 
-function openPets(){
-  petsOpenFlag = true;
+const inventoryModal = document.getElementById('inventoryModal');
+const invModalCoins = document.getElementById('invModalCoins');
+const invModalOreList = document.getElementById('invModalOreList');
+const eggsModal = document.getElementById('eggsModal');
+const eggsCoinsEl = document.getElementById('eggsCoins');
+
+function renderInvModalOres(){
+  invModalOreList.innerHTML = '';
+  const total = Object.values(state.inventory).reduce((a,b)=>a+b,0);
+  if(total === 0){
+    const note = document.createElement('div');
+    note.className = 'footnote';
+    note.textContent = 'Tu mochila está vacía. ¡Andá a picar!';
+    invModalOreList.appendChild(note);
+    return;
+  }
+  Object.keys(ORES).forEach(type=>{
+    const c = state.inventory[type] || 0;
+    if(c>0){
+      const row = document.createElement('div');
+      row.className = 'inv-row';
+      row.innerHTML = '<span class="dot" style="background:'+hexStr(ORES[type].color)+';color:'+hexStr(ORES[type].color)+'"></span>'+
+        '<span>'+ORES[type].name+'</span><b>'+c+'</b>';
+      invModalOreList.appendChild(row);
+    }
+  });
+}
+
+function openInventory(){
+  inventoryOpenFlag = true;
   isPaused = true;
   isMining = false;
   releaseLook();
+  invModalCoins.textContent = '$' + fmt(state.coins);
   renderGearInfo();
-  renderEggs();
   renderPets();
-  petsModal.classList.remove('hidden');
+  renderInvModalOres();
+  inventoryModal.classList.remove('hidden');
 }
-function closePets(){
-  petsModal.classList.add('hidden');
-  hatchReveal.classList.add('hidden');
-  hatchAnimating = false;
-  petsOpenFlag = false;
+function closeInventory(){
+  inventoryModal.classList.add('hidden');
+  inventoryOpenFlag = false;
   isPaused = false;
   requestLook();
 }
-document.getElementById('petsClose').onclick = closePets;
+document.getElementById('inventoryClose').onclick = closeInventory;
+
+function openEggs(){
+  eggsOpenFlag = true;
+  isPaused = true;
+  isMining = false;
+  releaseLook();
+  renderEggs();
+  eggsModal.classList.remove('hidden');
+}
+function closeEggs(){
+  eggsModal.classList.add('hidden');
+  hatchReveal.classList.add('hidden');
+  hatchAnimating = false;
+  eggsOpenFlag = false;
+  isPaused = false;
+  requestLook();
+}
+document.getElementById('eggsClose').onclick = closeEggs;
+
+// sistema de pestañas genérico (Portal e Inventario): cambia de panel sin cerrar el modal
+function setupTabs(rootEl){
+  const buttons = rootEl.querySelectorAll('.tabBtn');
+  buttons.forEach(btn=>{
+    btn.onclick = ()=>{
+      buttons.forEach(b=>b.classList.remove('active'));
+      rootEl.querySelectorAll('.tabPane').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      rootEl.querySelector('.tabPane[data-pane="'+btn.dataset.tab+'"]').classList.add('active');
+    };
+  });
+}
+document.querySelectorAll('.tabbedBody').forEach(setupTabs);
 
 /* ======================= MULTIJUGADOR (adaptador: Firebase / Storage / offline) ======================= */
 // Detecta automáticamente el mejor transporte disponible:
@@ -3057,7 +3120,7 @@ window.addEventListener('keydown', (e)=>{
     if(nearSell) sellAll();
     else if(nearShop) openShop();
     else if(nearPortal) openStages();
-    else if(nearEgg) openPets();
+    else if(nearEgg) openEggs();
     else if(nearRebirth) openRebirth();
   }
   if(k==='r' && !e.repeat && gameStarted && !isPaused){
@@ -3069,7 +3132,7 @@ window.addEventListener('keydown', (e)=>{
     toast(cameraMode==='third' ? '📷 Cámara en tercera persona' : '📷 Cámara en primera persona', '#6fe7ff');
   }
   if(k==='i' && !e.repeat && gameStarted && !isPaused){
-    openPets(); // inventario (equipo + mascotas) accesible desde cualquier lado, no solo junto a los Huevos
+    openInventory(); // pico/mochila/mascotas — accesible desde cualquier lado. Para abrir huevos, andá a la estación de Huevos.
   }
   if(gameStarted && !isPaused && e.key.length===1){
     cheatBuffer = (cheatBuffer + e.key.toLowerCase()).slice(-CHEAT_CODE.length);
@@ -3115,7 +3178,8 @@ window.addEventListener('keydown', (e)=>{
     if(shopOpenFlag) closeShop();
     if(rebirthOpenFlag) closeRebirth();
     if(stagesOpenFlag) closeStages();
-    if(petsOpenFlag) closePets();
+    if(inventoryOpenFlag) closeInventory();
+    if(eggsOpenFlag) closeEggs();
   }
 });
 window.addEventListener('keyup', (e)=>{

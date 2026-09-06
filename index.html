@@ -64,7 +64,7 @@
   <div id="promptSell" class="prompt panel"><kbd>E</kbd>Vender minerales</div>
   <div id="promptShop" class="prompt panel"><kbd>E</kbd>Abrir tienda</div>
   <div id="promptPortal" class="prompt panel"><kbd>E</kbd>Ver etapas y ranking</div>
-  <div id="promptEgg" class="prompt panel"><kbd>E</kbd>Huevos y mascotas</div>
+  <div id="promptEgg" class="prompt panel"><kbd>E</kbd>Tienda de Huevos</div>
   <div id="promptRebirth" class="prompt panel"><kbd>E</kbd>Renacer</div>
 
   <div id="toastContainer"></div>
@@ -168,63 +168,88 @@
 <div id="stagesModal" class="overlay hidden">
   <div class="modalBox panel">
     <div class="modalHead">
-      <h2>🗺️ Portal de Etapas</h2>
+      <h2>🗺️ Portal</h2>
       <button class="closeX" id="stagesClose">✕</button>
     </div>
-    <div class="modalBody" style="grid-template-columns:1fr 1fr;">
-      <div class="shopCol">
-        <h3>Etapas</h3>
-        <div id="stageList"></div>
+    <div class="tabbedBody">
+      <div class="tabSidebar">
+        <button class="tabBtn active" data-tab="stages">🗺️<span>Etapas</span></button>
+        <button class="tabBtn" data-tab="quests">📋<span>Misiones</span></button>
+        <button class="tabBtn" data-tab="achievements">🏆<span>Logros</span></button>
+        <button class="tabBtn" data-tab="codes">🎁<span>Códigos</span></button>
       </div>
-      <div class="shopCol">
-        <h3>📋 Misiones Diarias</h3>
-        <div id="questShopList"></div>
-        <div class="footnote" style="margin-top:10px;">Se completan y pagan solas al llegar al objetivo — no hace falta reclamarlas. El ranking compartido ahora se ve siempre abajo a la derecha.</div>
-      </div>
-    </div>
-    <div class="modalBody" style="grid-template-columns:1fr 1fr;border-top:2px solid var(--border);">
-      <div class="shopCol">
-        <h3>🏆 Logros <span class="mono" id="achievementCount" style="color:var(--text-dim);font-size:11px;">(0/0)</span></h3>
-        <div id="achievementList"></div>
-      </div>
-      <div class="shopCol">
-        <h3>🎁 Códigos</h3>
-        <div class="codeRow">
-          <input id="codeInput" type="text" maxlength="24" spellcheck="false" placeholder="Ingresá un código">
-          <button id="codeRedeemBtn">Canjear</button>
+      <div class="tabContent">
+        <div class="tabPane active" data-pane="stages">
+          <h3>Etapas</h3>
+          <div id="stageList"></div>
         </div>
-        <div class="footnote" style="margin-top:10px;">Probá <b class="mono">MINA3D</b>, <b class="mono">BIENVENIDO</b> o <b class="mono">GEMASGRATIS</b>.</div>
+        <div class="tabPane" data-pane="quests">
+          <h3>📋 Misiones Diarias</h3>
+          <div id="questShopList"></div>
+          <div class="footnote" style="margin-top:10px;">Se completan y pagan solas al llegar al objetivo — no hace falta reclamarlas.</div>
+        </div>
+        <div class="tabPane" data-pane="achievements">
+          <h3>🏆 Logros <span class="mono" id="achievementCount" style="color:var(--text-dim);font-size:11px;">(0/0)</span></h3>
+          <div id="achievementList"></div>
+        </div>
+        <div class="tabPane" data-pane="codes">
+          <h3>🎁 Códigos</h3>
+          <div class="codeRow">
+            <input id="codeInput" type="text" maxlength="24" spellcheck="false" placeholder="Ingresá un código">
+            <button id="codeRedeemBtn">Canjear</button>
+          </div>
+          <div class="footnote" style="margin-top:10px;">Probá <b class="mono">MINA3D</b>, <b class="mono">BIENVENIDO</b> o <b class="mono">GEMASGRATIS</b>.</div>
+        </div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- eggs / pets modal -->
-<div id="petsModal" class="overlay hidden">
+<!-- inventario: SOLO equipo (pico/mochila), mascotas y minerales — nada de abrir huevos acá -->
+<div id="inventoryModal" class="overlay hidden">
   <div class="modalBox panel">
     <div class="modalHead">
       <h2>🎒 Inventario</h2>
-      <div class="coins" id="petsCoins">$0</div>
-      <button class="closeX" id="petsClose">✕</button>
+      <div class="coins" id="invModalCoins">$0</div>
+      <button class="closeX" id="inventoryClose">✕</button>
     </div>
-    <div class="modalBody" style="grid-template-columns:1fr 1fr;border-bottom:2px solid var(--border);">
-      <div class="shopCol">
-        <h3>Tu pico</h3>
-        <div id="gearPickaxeInfo"></div>
+    <div class="tabbedBody">
+      <div class="tabSidebar">
+        <button class="tabBtn active" data-tab="pets">🐾<span>Mascotas</span></button>
+        <button class="tabBtn" data-tab="gear">⛏️<span>Equipo</span></button>
+        <button class="tabBtn" data-tab="ores">💎<span>Minerales</span></button>
       </div>
-      <div class="shopCol">
-        <h3>Tu mochila</h3>
-        <div id="gearBackpackInfo"></div>
+      <div class="tabContent">
+        <div class="tabPane active" data-pane="pets">
+          <h3>Tus mascotas <span class="mono" id="petSlotCount" style="color:var(--text-dim);font-size:11px;">(0/3 equipadas)</span></h3>
+          <div id="petList" class="pet-grid"></div>
+        </div>
+        <div class="tabPane" data-pane="gear">
+          <div class="gearCols">
+            <div><h3>Tu pico</h3><div id="gearPickaxeInfo"></div></div>
+            <div><h3>Tu mochila</h3><div id="gearBackpackInfo"></div></div>
+          </div>
+        </div>
+        <div class="tabPane" data-pane="ores">
+          <h3>Tus minerales</h3>
+          <div id="invModalOreList"></div>
+        </div>
       </div>
     </div>
-    <div class="modalBody" style="grid-template-columns:1fr 1fr;">
+  </div>
+</div>
+
+<!-- tienda de huevos: SOLO huevos — para ver/equipar mascotas usá el Inventario (tecla I) -->
+<div id="eggsModal" class="overlay hidden">
+  <div class="modalBox panel">
+    <div class="modalHead">
+      <h2>🥚 Tienda de Huevos</h2>
+      <div class="coins" id="eggsCoins">$0</div>
+      <button class="closeX" id="eggsClose">✕</button>
+    </div>
+    <div class="modalBody" style="grid-template-columns:1fr;">
       <div class="shopCol">
-        <h3>Huevos</h3>
         <div id="eggList"></div>
-      </div>
-      <div class="shopCol">
-        <h3>Tus mascotas <span class="mono" id="petSlotCount" style="color:var(--text-dim);font-size:11px;">(0/3 equipadas)</span></h3>
-        <div id="petList"></div>
       </div>
     </div>
     <div id="hatchReveal" class="hidden">
