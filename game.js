@@ -75,6 +75,23 @@ const ORES = {
   celestium:     {name:'Celestio',              color:0x6affea, health:30, value:2800,  glow:true,  hardness:10},
   oblivionshard: {name:'Fragmento del Olvido',  color:0x1a0620, health:50, value:12000, glow:true,  hardness:11},
   starcore:      {name:'Núcleo Estelar',        color:0xfff2c0, health:65, value:20000, glow:true,  hardness:11},
+
+  // --- Profundidades Heladas: set exclusivo temático glaciar (hardness 12-13, requiere pico de Escarcha/Glaciar Eterno) ---
+  frostdust:      {name:'Escarcha',              color:0xdfeeff, health:1,  value:8,     glow:false, hardness:12},
+  icefragment:    {name:'Fragmento de Hielo',    color:0xb8e0ff, health:2,  value:20,    glow:false, hardness:12},
+  permafrost:     {name:'Permahielo',            color:0x8fc8f0, health:3,  value:40,    glow:false, hardness:12},
+  glacialquartz:  {name:'Cuarzo Glacial',        color:0x6fb8e8, health:5,  value:80,    glow:false, hardness:12},
+  snowshard:      {name:'Esquirla de Nieve',     color:0xffffff, health:6,  value:140,   glow:false, hardness:12},
+  blizzardstone:  {name:'Piedra de Ventisca',    color:0x9ad8ff, health:8,  value:220,   glow:false, hardness:12},
+  auroragem:      {name:'Gema de Aurora',        color:0x7fffe0, health:10, value:340,   glow:false, hardness:12},
+  crystalfrost:   {name:'Cristal de Escarcha',   color:0xaef0ff, health:13, value:520,   glow:true,  hardness:12},
+  icemarrow:      {name:'Médula de Hielo',       color:0x4fd8ff, health:16, value:780,   glow:true,  hardness:12},
+  frozenopal:     {name:'Ópalo Congelado',       color:0xd0f0ff, health:18, value:1150,  glow:true,  hardness:12},
+  glaciershard:   {name:'Esquirla de Glaciar',   color:0x3fb8ff, health:22, value:1650,  glow:true,  hardness:12},
+  absolutezero:   {name:'Cero Absoluto',         color:0x1fdfff, health:26, value:2400,  glow:true,  hardness:12},
+  permafrostcore: {name:'Núcleo de Permahielo',  color:0x2f9fdf, health:30, value:3400,  glow:true,  hardness:12},
+  eternalfrost:   {name:'Escarcha Eterna',       color:0xaaffee, health:50, value:25000, glow:true,  hardness:13},
+  glaciercore:    {name:'Núcleo del Glaciar',    color:0x00e5ff, health:65, value:42000, glow:true,  hardness:13},
 };
 
 // listas ordenadas de mineral más superficial a más profundo, una por etapa.
@@ -83,6 +100,7 @@ const BASE_ORE_ORDER    = ['stone','coal','copper','iron','silver','gold','plati
 const CANDY_ORE_ORDER   = ['sugar','marshmallow','gum','caramel','cookie','chocolate','cottoncandy','lollipop','gummy','truffle','strawberrycake','goldbonbon','macaron','sugardiamond','candycrystal'];
 const VOLCANO_ORE_ORDER = ['cinder','sulfur','slag','basalt','obsidianshard','brimstone','magnetite','pyrite','moltenglass','emberopal','infernite','dragonglass','lavagem','phoenixash','magmacore'];
 const ABYSS_ORE_ORDER   = ['shadowdust','moonstone','nebulite','wraithglass','duskcrystal','starshard','gravitite','echostone','abyssalpearl','voidglass','eclipsegem','phantomcore','celestium','oblivionshard','starcore'];
+const FROZEN_ORE_ORDER  = ['frostdust','icefragment','permafrost','glacialquartz','snowshard','blizzardstone','auroragem','crystalfrost','icemarrow','frozenopal','glaciershard','absolutezero','permafrostcore','eternalfrost','glaciercore'];
 
 const STAGES = [
   {name:'Mina Inicial',    unlockRebirths:0, valueMult:1,   ground:0x453a30, torch:0xffb14e, sky:['#141022','#0c0a10','#050405'], oreOrder:BASE_ORE_ORDER,
@@ -95,6 +113,8 @@ const STAGES = [
     fog:0x1a0806, fogDensity:0.04, ambient:0x4a1c10, ambientIntensity:0.6, hemiSky:0x662a1a, hemiGround:0x1a0806, hemiIntensity:0.9},
   {name:'Abismo Místico',  unlockRebirths:6, valueMult:4.5, ground:0x3a2c4a, torch:0xff5cf0, sky:['#1c0e2a','#120a1c','#06040a'], oreOrder:ABYSS_ORE_ORDER,
     fog:0x120a1c, fogDensity:0.045, ambient:0x2a1040, ambientIntensity:0.5, hemiSky:0x4a2060, hemiGround:0x0c0616, hemiIntensity:0.8},
+  {name:'Profundidades Heladas', unlockRebirths:10, valueMult:7, ground:0xc8e4f5, torch:0x8fe0ff, sky:['#dff2ff','#b8d8ec','#8fb8d0'], oreOrder:FROZEN_ORE_ORDER,
+    fog:0xcfe8f5, fogDensity:0.03, ambient:0xdfeeff, ambientIntensity:0.65, hemiSky:0xffffff, hemiGround:0xa8ccdf, hemiIntensity:0.85},
 ];
 
 // probabilidad de cada mineral según qué tan cerca esté su posición "ideal" en
@@ -129,6 +149,8 @@ const PICKAXES = [
   {name:'Pico de Magma Ardiente',   dps:115, cost:3800000,  maxHardness:9,  unlockStage:2},
   {name:'Pico del Abismo',          dps:165, cost:8000000,  maxHardness:10, unlockStage:3},
   {name:'Pico del Vacío Eterno',    dps:230, cost:17000000, maxHardness:11, unlockStage:3},
+  {name:'Pico de Escarcha',         dps:320, cost:35000000, maxHardness:12, unlockStage:4},
+  {name:'Pico del Glaciar Eterno',  dps:450, cost:75000000, maxHardness:13, unlockStage:4},
 ];
 const PICKAXE_VISUALS = [
   {handle:0x6b4a2b, head:0x9a958c, emissive:false, scale:0.85, gem:false},
@@ -143,6 +165,8 @@ const PICKAXE_VISUALS = [
   {handle:0x2a1810, head:0xff5d3d, emissive:true,  scale:1.44, gem:true},
   {handle:0x1a0e2a, head:0x8a4fd8, emissive:true,  scale:1.51, gem:true},
   {handle:0x0a0614, head:0x6a1fb8, emissive:true,  scale:1.60, gem:true},
+  {handle:0xdfeeff, head:0x6fb8e8, emissive:true,  scale:1.68, gem:true},
+  {handle:0xaaffee, head:0x00e5ff, emissive:true,  scale:1.78, gem:true},
 ];
 const BACKPACKS = [
   {name:'Saco Básico',              cap:40,    cost:0,       unlockStage:0},
@@ -157,6 +181,8 @@ const BACKPACKS = [
   {name:'Mochila Ígnea',            cap:14000, cost:3800000, unlockStage:2},
   {name:'Mochila del Abismo',       cap:22000, cost:8000000, unlockStage:3},
   {name:'Mochila del Vacío Eterno', cap:35000, cost:17000000,unlockStage:3},
+  {name:'Mochila de Escarcha',      cap:55000, cost:35000000,unlockStage:4},
+  {name:'Mochila del Glaciar Eterno',cap:90000,cost:75000000,unlockStage:4},
 ];
 
 const FIELD_R = 5;
@@ -209,6 +235,8 @@ const EGGS = [
     table:[['rare',15],['epic',35],['legendary',35],['mythic',15]]},
   {id:'void',   name:'Huevo del Abismo', cost:1000000, unlockStage:3,
     table:[['epic',10],['legendary',35],['mythic',55]]},
+  {id:'frozen', name:'Huevo Congelado', cost:2500000, unlockStage:4,
+    table:[['legendary',25],['mythic',75]]},
 ];
 const MAX_EQUIPPED_PETS = 3;
 
@@ -1093,28 +1121,30 @@ function buildPickaxeModel(tier){
   ferrule.position.set(0, 0.72, 0);
   g.add(ferrule);
 
-  // head: a straight horizontal bar through the top, with two mirrored pointed tips
-  const headBar = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.055,0.055), headMat);
+  // head: barra recta que corre de ADELANTE hacia ATRÁS (eje Z local), con dos puntas
+  // en espejo — así una punta mira siempre hacia los bloques (adelante) y la otra hacia
+  // el jugador, como un pico de verdad, en vez de las puntas apuntando a los costados.
+  const headBar = new THREE.Mesh(new THREE.BoxGeometry(0.055,0.055,0.6), headMat);
   headBar.position.set(0, 0.76, 0);
   g.add(headBar);
 
   const tipGeo = new THREE.ConeGeometry(0.05, 0.22, 6);
-  const tipL = new THREE.Mesh(tipGeo, headMat);
-  tipL.rotation.z = Math.PI/2;
-  tipL.position.set(-0.41, 0.76, 0);
-  g.add(tipL);
+  const tipFront = new THREE.Mesh(tipGeo, headMat);
+  tipFront.rotation.x = -Math.PI/2;
+  tipFront.position.set(0, 0.76, -0.41);
+  g.add(tipFront);
 
-  const tipR = new THREE.Mesh(tipGeo, headMat);
-  tipR.rotation.z = -Math.PI/2;
-  tipR.position.set(0.41, 0.76, 0);
-  g.add(tipR);
+  const tipBack = new THREE.Mesh(tipGeo, headMat);
+  tipBack.rotation.x = Math.PI/2;
+  tipBack.position.set(0, 0.76, 0.41);
+  g.add(tipBack);
 
   if(v.gem){
     const gem = new THREE.Mesh(
       new THREE.OctahedronGeometry(0.05,0),
       new THREE.MeshStandardMaterial({color:v.head, emissive:v.head, emissiveIntensity:0.9, roughness:0.1, metalness:0.35})
     );
-    gem.position.set(0, 0.72, 0.065);
+    gem.position.set(0.065, 0.72, 0);
     g.add(gem);
   }
 
@@ -2121,9 +2151,15 @@ function renderGearInfo(){
     (nextB ? '<div class="footnote" style="margin-top:8px;">Siguiente: <b>'+nextB.name+'</b> por $'+fmt(nextB.cost)+' en la Tienda.</div>' : '<div class="footnote" style="margin-top:8px;">¡Ya tenés la mochila más grande del juego!</div>');
 }
 
+const PET_ICONS = {
+  mole:'🦫', bat:'🦇', fox:'🦊', eagle:'🦅', drake:'🐲', golem:'🗿',
+  phoenix:'🔥', kraken:'🐙', diamgo:'💎', voidcat:'🐈‍⬛',
+};
+
 function renderPets(){
   petSlotCount.textContent = '('+state.equippedPets.length+'/'+MAX_EQUIPPED_PETS+' equipadas)';
   petList.innerHTML = '';
+  petList.className = 'pet-grid';
   if(state.pets.length === 0){
     const note = document.createElement('div');
     note.className = 'footnote';
@@ -2140,18 +2176,23 @@ function renderPets(){
     const m = petLevelMult(level) * (p.golden ? 1.5 : 1);
     const maxed = level >= PET_MAX_LEVEL;
     const xpPct = maxed ? 100 : Math.round(100*(p.xp||0)/xpForPetLevel(level));
-    const row = document.createElement('div');
-    row.className = 'shop-row' + (equipped ? ' equipped' : '') + (p.golden ? ' golden' : '');
-    row.innerHTML = '<div class="shop-row-main"><b><span class="rarity-dot" style="background:'+hexStr(rarityInfo.color)+';color:'+hexStr(rarityInfo.color)+'"></span>'+(p.golden?'✨ ':'')+p.name+(p.golden?' Dorada':'')+' <span class="mono" style="color:var(--cyan);font-size:11px;">Nv.'+level+'</span></b>'+
-      '<span>'+rarityInfo.name+' · +'+Math.round(p.coinMult*m*100)+'% monedas, +'+Math.round(p.dpsMult*m*100)+'% picado'+(p.luck>0?', +'+Math.round(p.luck*m*100)+'% suerte':'')+(p.cap>0?', +'+Math.round(p.cap*m)+' mochila':'')+'</span>'+
-      '<div class="pet-xp-wrap"><div class="pet-xp-inner" style="width:'+xpPct+'%"></div></div>'+
-      '<span style="font-size:10px;color:var(--text-dim);">'+(maxed?'Nivel máximo':(Math.round(p.xp||0)+' / '+xpForPetLevel(level)+' XP'))+'</span></div>';
-    const btn = document.createElement('button');
-    btn.textContent = equipped ? 'Quitar' : 'Equipar';
-    btn.disabled = !equipped && state.equippedPets.length >= MAX_EQUIPPED_PETS;
-    btn.onclick = ()=> togglePetEquip(p.uid);
-    row.appendChild(btn);
-    petList.appendChild(row);
+    const bonusLine = '+'+Math.round(p.coinMult*m*100)+'% $'
+      + (p.dpsMult>0 ? ', +'+Math.round(p.dpsMult*m*100)+'% pico' : '')
+      + (p.luck>0 ? ', +'+Math.round(p.luck*m*100)+'% suerte' : '')
+      + (p.cap>0 ? ', +'+Math.round(p.cap*m)+' mochila' : '');
+    const card = document.createElement('div');
+    card.className = 'pet-card rarity-'+p.rarity + (equipped?' equipped':'') + (p.golden?' golden':'');
+    card.title = bonusLine;
+    card.innerHTML =
+      (equipped ? '<span class="pet-equipped-badge">✅</span>' : '') +
+      '<div class="pet-icon">'+(PET_ICONS[p.id]||'❓')+'</div>' +
+      '<div class="pet-name">'+(p.golden?'✨ ':'')+p.name+'</div>' +
+      '<div class="pet-rarity-label" style="color:'+hexStr(rarityInfo.color)+'">'+rarityInfo.name+(p.golden?' Dorada':'')+'</div>' +
+      '<div class="pet-xp-wrap"><div class="pet-xp-inner" style="width:'+xpPct+'%"></div></div>' +
+      '<div class="pet-lvl">Nv.'+level+'</div>';
+    card.onclick = ()=> togglePetEquip(p.uid);
+    if(!equipped && state.equippedPets.length >= MAX_EQUIPPED_PETS) card.classList.add('locked');
+    petList.appendChild(card);
   });
 }
 

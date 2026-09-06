@@ -243,6 +243,29 @@
   .rarity-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:6px;box-shadow:0 0 6px currentColor;}
   .pet-xp-wrap{width:100%;height:5px;border-radius:4px;background:#1a130e;overflow:hidden;border:1px solid var(--border);margin-top:5px;}
   .pet-xp-inner{height:100%;background:linear-gradient(90deg,var(--cyan),var(--pink));width:0%;transition:width .2s;}
+
+  /* grilla de mascotas al estilo "cards" del juego original, en vez de una lista de filas */
+  .pet-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(98px,1fr));gap:10px;}
+  .pet-card{
+    position:relative;border-radius:12px;padding:8px 6px 18px;text-align:center;cursor:pointer;
+    background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(0,0,0,.35));
+    border:2px solid var(--border);transition:transform .1s;
+  }
+  .pet-card:hover{transform:translateY(-2px);}
+  .pet-card.locked{opacity:.5;cursor:not-allowed;}
+  .pet-card.rarity-common{border-color:#9a958c;}
+  .pet-card.rarity-rare{border-color:#4f8bff;box-shadow:0 0 10px rgba(79,139,255,.25);}
+  .pet-card.rarity-epic{border-color:#9b6bff;box-shadow:0 0 10px rgba(155,107,255,.3);}
+  .pet-card.rarity-legendary{border-color:#ffb14e;box-shadow:0 0 12px rgba(255,177,78,.35);}
+  .pet-card.rarity-mythic{border-color:#ff5cf0;box-shadow:0 0 14px rgba(255,92,240,.4);}
+  .pet-card.equipped{outline:2px solid var(--gold);outline-offset:1px;}
+  .pet-card.golden{background:linear-gradient(180deg,rgba(255,224,102,.22),rgba(0,0,0,.35));}
+  .pet-card .pet-equipped-badge{position:absolute;top:4px;left:5px;font-size:11px;}
+  .pet-card .pet-icon{font-size:32px;line-height:1;margin:6px 0 3px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5));}
+  .pet-card .pet-name{font-size:11px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .pet-card .pet-rarity-label{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;}
+  .pet-card .pet-lvl{position:absolute;bottom:4px;right:7px;font-family:'JetBrains Mono';font-size:10px;color:var(--cyan);font-weight:700;}
+
   .rank-row{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:9px;background:rgba(0,0,0,.2);margin-bottom:6px;font-size:13px;}
   .rank-row .pos{width:20px;color:var(--text-dim);font-family:'JetBrains Mono';font-weight:700;}
   .rank-row .who{flex:1;color:var(--text);}
