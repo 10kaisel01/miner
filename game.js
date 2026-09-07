@@ -105,16 +105,18 @@ const FROZEN_ORE_ORDER  = ['frostdust','icefragment','permafrost','glacialquartz
 const STAGES = [
   {name:'Mina Inicial',    unlockRebirths:0, valueMult:1,   ground:0x453a30, torch:0xffb14e, sky:['#141022','#0c0a10','#050405'], oreOrder:BASE_ORE_ORDER,
     fog:0x0c0a10, fogDensity:0.032, ambient:0x2a2030, ambientIntensity:0.55, hemiSky:0x3a3a52, hemiGround:0x1c140c, hemiIntensity:0.85},
-  // Brillo bajado a propósito (antes: ambient .9 / hemi 1.1 / niebla muy clara) para que no
-  // encandile ni se vea lavado, manteniendo la identidad pastel-cálida del mundo.
-  {name:'Mundo de Caramelos',unlockRebirths:1, valueMult:1.6, ground:0xf2a8cf, torch:0xff6fd8, sky:['#f0c0e0','#dd9fcf','#c47fbd'], oreOrder:CANDY_ORE_ORDER,
-    fog:0xe8a8cf, fogDensity:0.028, ambient:0xf0bcdd, ambientIntensity:0.6, hemiSky:0xffe0f0, hemiGround:0xe38fbf, hemiIntensity:0.72},
+  // Brillo bajado más todavía (venía de ambient .6/hemi .72, seguía deslumbrando) —
+  // colores más saturados y menos "lavados en blanco", pero conservando el tono pastel.
+  {name:'Mundo de Caramelos',unlockRebirths:1, valueMult:1.6, ground:0xe888bb, torch:0xff6fd8, sky:['#dd9fcf','#c47fbd','#a8639f'], oreOrder:CANDY_ORE_ORDER,
+    fog:0xd890bd, fogDensity:0.032, ambient:0xd898bf, ambientIntensity:0.4, hemiSky:0xf2c8e0, hemiGround:0xc4699e, hemiIntensity:0.5},
   {name:'Volcán',          unlockRebirths:3, valueMult:2.6, ground:0x4a2418, torch:0xff5d3d, sky:['#2a0e0a','#1a0806','#0a0403'], oreOrder:VOLCANO_ORE_ORDER,
     fog:0x1a0806, fogDensity:0.04, ambient:0x4a1c10, ambientIntensity:0.6, hemiSky:0x662a1a, hemiGround:0x1a0806, hemiIntensity:0.9},
   {name:'Abismo Místico',  unlockRebirths:6, valueMult:4.5, ground:0x3a2c4a, torch:0xff5cf0, sky:['#1c0e2a','#120a1c','#06040a'], oreOrder:ABYSS_ORE_ORDER,
     fog:0x120a1c, fogDensity:0.045, ambient:0x2a1040, ambientIntensity:0.5, hemiSky:0x4a2060, hemiGround:0x0c0616, hemiIntensity:0.8},
-  {name:'Profundidades Heladas', unlockRebirths:10, valueMult:7, ground:0xc8e4f5, torch:0x8fe0ff, sky:['#dff2ff','#b8d8ec','#8fb8d0'], oreOrder:FROZEN_ORE_ORDER,
-    fog:0xcfe8f5, fogDensity:0.03, ambient:0xdfeeff, ambientIntensity:0.65, hemiSky:0xffffff, hemiGround:0xa8ccdf, hemiIntensity:0.85},
+  // Ídem: venía de ambient .65/hemi .85 con cielo blanco puro, era el mundo más
+  // brillante de todos. Bajado y con azules más presentes en vez de blanco liso.
+  {name:'Profundidades Heladas', unlockRebirths:10, valueMult:7, ground:0x9fc3dc, torch:0x8fe0ff, sky:['#b8d8ec','#93b8cf','#6f95ac'], oreOrder:FROZEN_ORE_ORDER,
+    fog:0x9fc0d4, fogDensity:0.034, ambient:0xaed0e8, ambientIntensity:0.42, hemiSky:0xd0e8f5, hemiGround:0x7fa8c2, hemiIntensity:0.52},
 ];
 
 // probabilidad de cada mineral según qué tan cerca esté su posición "ideal" en
@@ -209,35 +211,89 @@ const PET_RARITIES = {
   mythic:    {name:'Mítico',     color:0xff5cf0},
 };
 const PETS = [
-  {id:'mole',    name:'Topo',              rarity:'common',    coinMult:0.02, dpsMult:0.00, luck:0.00, cap:0},
-  {id:'bat',     name:'Murciélago',        rarity:'common',    coinMult:0.00, dpsMult:0.03, luck:0.00, cap:0},
-  {id:'fox',     name:'Zorro Minero',      rarity:'rare',      coinMult:0.06, dpsMult:0.02, luck:0.00, cap:20},
-  {id:'eagle',   name:'Águila Dorada',     rarity:'rare',      coinMult:0.02, dpsMult:0.06, luck:0.00, cap:20},
-  {id:'drake',   name:'Dragón Bebé',       rarity:'epic',      coinMult:0.10, dpsMult:0.08, luck:0.03, cap:40},
-  {id:'golem',   name:'Gólem de Piedra',   rarity:'epic',      coinMult:0.06, dpsMult:0.12, luck:0.02, cap:40},
-  {id:'phoenix', name:'Fénix',             rarity:'legendary', coinMult:0.18, dpsMult:0.12, luck:0.06, cap:80},
-  {id:'kraken',  name:'Kraken',            rarity:'legendary', coinMult:0.12, dpsMult:0.18, luck:0.05, cap:80},
-  {id:'diamgo',  name:'Gólem de Diamante', rarity:'mythic',    coinMult:0.30, dpsMult:0.22, luck:0.12, cap:150},
-  {id:'voidcat', name:'Gato del Vacío',    rarity:'mythic',    coinMult:0.24, dpsMult:0.28, luck:0.15, cap:150},
+  // --- Mundo 0: Mina Inicial ---
+  {id:'mole', world:0, name:'Topo', rarity:'common', color:0x9a9a9a, coinMult:0.02, dpsMult:0.0, luck:0.0, cap:0},
+  {id:'bat', world:0, name:'Murciélago', rarity:'common', color:0x9a9a9a, coinMult:0.0, dpsMult:0.03, luck:0.0, cap:0},
+  {id:'fox', world:0, name:'Zorro Minero', rarity:'rare', color:0x4fd1ff, coinMult:0.06, dpsMult:0.02, luck:0.0, cap:20},
+  {id:'eagle', world:0, name:'Águila Dorada', rarity:'rare', color:0x4fd1ff, coinMult:0.02, dpsMult:0.06, luck:0.0, cap:20},
+  {id:'drake', world:0, name:'Dragón Bebé', rarity:'epic', color:0xb15cff, coinMult:0.1, dpsMult:0.08, luck:0.03, cap:40},
+  {id:'golem', world:0, name:'Gólem de Piedra', rarity:'epic', color:0xb15cff, coinMult:0.06, dpsMult:0.12, luck:0.02, cap:40},
+  {id:'phoenix', world:0, name:'Fénix', rarity:'legendary', color:0xffb14e, coinMult:0.18, dpsMult:0.12, luck:0.06, cap:80},
+  {id:'kraken', world:0, name:'Kraken', rarity:'legendary', color:0xffb14e, coinMult:0.12, dpsMult:0.18, luck:0.05, cap:80},
+  {id:'diamgo', world:0, name:'Gólem de Diamante', rarity:'mythic', color:0xff5cf0, coinMult:0.3, dpsMult:0.22, luck:0.12, cap:150},
+  {id:'voidcat', world:0, name:'Gato del Vacío', rarity:'mythic', color:0xff5cf0, coinMult:0.24, dpsMult:0.28, luck:0.15, cap:150},
+  {id:'voidcat', world:0, name:'El Primer Minero', rarity:'mythic', secret:true, color:0xffffff, coinMult:0.96, dpsMult:0.704, luck:0.384, cap:480},
+  // --- Mundo 1: Mundo de Caramelos ---
+  {id:'mole', world:1, name:'Topo de Azúcar', rarity:'common', color:0xffe0f0, coinMult:0.032, dpsMult:0.0, luck:0.0, cap:0},
+  {id:'bat', world:1, name:'Murciélago de Chicle', rarity:'common', color:0xffe0f0, coinMult:0.0, dpsMult:0.048, luck:0.0, cap:0},
+  {id:'fox', world:1, name:'Zorro de Caramelo', rarity:'rare', color:0xffb3d9, coinMult:0.096, dpsMult:0.032, luck:0.0, cap:32},
+  {id:'eagle', world:1, name:'Águila de Algodón de Azúcar', rarity:'rare', color:0xffb3d9, coinMult:0.032, dpsMult:0.096, luck:0.0, cap:32},
+  {id:'drake', world:1, name:'Dragón de Gomita', rarity:'epic', color:0xff7fc2, coinMult:0.16, dpsMult:0.128, luck:0.048, cap:64},
+  {id:'golem', world:1, name:'Gólem de Chocolate', rarity:'epic', color:0xff7fc2, coinMult:0.096, dpsMult:0.192, luck:0.032, cap:64},
+  {id:'phoenix', world:1, name:'Fénix de Bombón', rarity:'legendary', color:0xffd23f, coinMult:0.288, dpsMult:0.192, luck:0.096, cap:128},
+  {id:'kraken', world:1, name:'Kraken de Malvavisco', rarity:'legendary', color:0xffd23f, coinMult:0.192, dpsMult:0.288, luck:0.08, cap:128},
+  {id:'diamgo', world:1, name:'Gólem de Diamante de Azúcar', rarity:'mythic', color:0xff3df0, coinMult:0.48, dpsMult:0.352, luck:0.192, cap:240},
+  {id:'voidcat', world:1, name:'Gato de Cristal de Caramelo', rarity:'mythic', color:0xff3df0, coinMult:0.384, dpsMult:0.448, luck:0.24, cap:240},
+  {id:'voidcat', world:1, name:'Rey Caramelo', rarity:'mythic', secret:true, color:0xffffff, coinMult:1.536, dpsMult:1.1264, luck:0.6144, cap:768},
+  // --- Mundo 2: Volcán ---
+  {id:'mole', world:2, name:'Topo de Cenizas', rarity:'common', color:0x8a6a4a, coinMult:0.052, dpsMult:0.0, luck:0.0, cap:0},
+  {id:'bat', world:2, name:'Murciélago Ígneo', rarity:'common', color:0x8a6a4a, coinMult:0.0, dpsMult:0.078, luck:0.0, cap:0},
+  {id:'fox', world:2, name:'Zorro de Magma', rarity:'rare', color:0xd9903a, coinMult:0.156, dpsMult:0.052, luck:0.0, cap:52},
+  {id:'eagle', world:2, name:'Águila de Fuego', rarity:'rare', color:0xd9903a, coinMult:0.052, dpsMult:0.156, luck:0.0, cap:52},
+  {id:'drake', world:2, name:'Dragón de Lava', rarity:'epic', color:0xff6a3d, coinMult:0.26, dpsMult:0.208, luck:0.078, cap:104},
+  {id:'golem', world:2, name:'Gólem de Obsidiana', rarity:'epic', color:0xff6a3d, coinMult:0.156, dpsMult:0.312, luck:0.052, cap:104},
+  {id:'phoenix', world:2, name:'Fénix Volcánico', rarity:'legendary', color:0xff3d1a, coinMult:0.468, dpsMult:0.312, luck:0.156, cap:208},
+  {id:'kraken', world:2, name:'Kraken de Magma', rarity:'legendary', color:0xff3d1a, coinMult:0.312, dpsMult:0.468, luck:0.13, cap:208},
+  {id:'diamgo', world:2, name:'Gólem de Vidrio de Dragón', rarity:'mythic', color:0xffe066, coinMult:0.78, dpsMult:0.572, luck:0.312, cap:390},
+  {id:'voidcat', world:2, name:'Gato de Ascuas', rarity:'mythic', color:0xffe066, coinMult:0.624, dpsMult:0.728, luck:0.39, cap:390},
+  {id:'voidcat', world:2, name:'Señor del Magma', rarity:'mythic', secret:true, color:0xffffff, coinMult:2.496, dpsMult:1.8304, luck:0.9984, cap:1248},
+  // --- Mundo 3: Abismo Místico ---
+  {id:'mole', world:3, name:'Topo Espectral', rarity:'common', color:0x6a4fd8, coinMult:0.09, dpsMult:0.0, luck:0.0, cap:0},
+  {id:'bat', world:3, name:'Murciélago Umbrío', rarity:'common', color:0x6a4fd8, coinMult:0.0, dpsMult:0.135, luck:0.0, cap:0},
+  {id:'fox', world:3, name:'Zorro del Ocaso', rarity:'rare', color:0x9a7fff, coinMult:0.27, dpsMult:0.09, luck:0.0, cap:90},
+  {id:'eagle', world:3, name:'Águila Estelar', rarity:'rare', color:0x9a7fff, coinMult:0.09, dpsMult:0.27, luck:0.0, cap:90},
+  {id:'drake', world:3, name:'Dragón del Vacío', rarity:'epic', color:0xc8a0ff, coinMult:0.45, dpsMult:0.36, luck:0.135, cap:180},
+  {id:'golem', world:3, name:'Gólem Fantasma', rarity:'epic', color:0xc8a0ff, coinMult:0.27, dpsMult:0.54, luck:0.09, cap:180},
+  {id:'phoenix', world:3, name:'Fénix Eclipse', rarity:'legendary', color:0xff5cf0, coinMult:0.81, dpsMult:0.54, luck:0.27, cap:360},
+  {id:'kraken', world:3, name:'Kraken Abisal', rarity:'legendary', color:0xff5cf0, coinMult:0.54, dpsMult:0.81, luck:0.225, cap:360},
+  {id:'diamgo', world:3, name:'Gólem Celeste', rarity:'mythic', color:0x4fd8ff, coinMult:1.35, dpsMult:0.99, luck:0.54, cap:675},
+  {id:'voidcat', world:3, name:'Gato del Olvido', rarity:'mythic', color:0x4fd8ff, coinMult:1.08, dpsMult:1.26, luck:0.675, cap:675},
+  {id:'voidcat', world:3, name:'Devorador de Estrellas', rarity:'mythic', secret:true, color:0xffffff, coinMult:4.32, dpsMult:3.168, luck:1.728, cap:2160},
+  // --- Mundo 4: Profundidades Heladas ---
+  {id:'mole', world:4, name:'Topo de Escarcha', rarity:'common', color:0xb8d8ec, coinMult:0.14, dpsMult:0.0, luck:0.0, cap:0},
+  {id:'bat', world:4, name:'Murciélago Glacial', rarity:'common', color:0xb8d8ec, coinMult:0.0, dpsMult:0.21, luck:0.0, cap:0},
+  {id:'fox', world:4, name:'Zorro Ártico', rarity:'rare', color:0x8fc8f0, coinMult:0.42, dpsMult:0.14, luck:0.0, cap:140},
+  {id:'eagle', world:4, name:'Águila de las Nieves', rarity:'rare', color:0x8fc8f0, coinMult:0.14, dpsMult:0.42, luck:0.0, cap:140},
+  {id:'drake', world:4, name:'Dragón de Hielo', rarity:'epic', color:0x4fd8ff, coinMult:0.7, dpsMult:0.56, luck:0.21, cap:280},
+  {id:'golem', world:4, name:'Gólem de Permahielo', rarity:'epic', color:0x4fd8ff, coinMult:0.42, dpsMult:0.84, luck:0.14, cap:280},
+  {id:'phoenix', world:4, name:'Fénix de Cristal', rarity:'legendary', color:0x00e5ff, coinMult:1.26, dpsMult:0.84, luck:0.42, cap:560},
+  {id:'kraken', world:4, name:'Kraken Congelado', rarity:'legendary', color:0x00e5ff, coinMult:0.84, dpsMult:1.26, luck:0.35, cap:560},
+  {id:'diamgo', world:4, name:'Gólem del Glaciar', rarity:'mythic', color:0xaaffee, coinMult:2.1, dpsMult:1.54, luck:0.84, cap:1050},
+  {id:'voidcat', world:4, name:'Gato del Cero Absoluto', rarity:'mythic', color:0xaaffee, coinMult:1.68, dpsMult:1.96, luck:1.05, cap:1050},
+  {id:'voidcat', world:4, name:'Guardián del Glaciar Eterno', rarity:'mythic', secret:true, color:0xffffff, coinMult:6.72, dpsMult:4.928, luck:2.688, cap:3360},
 ];
 const EGGS = [
-  {id:'common', name:'Huevo Común', cost:250, unlockStage:0,
+  {id:'common', name:'Huevo Común', cost:250, unlockStage:0, world:0,
     table:[['common',75],['rare',22],['epic',3]]},
-  {id:'rare',   name:'Huevo Raro', cost:2500, unlockStage:0,
+  {id:'rare',   name:'Huevo Raro', cost:2500, unlockStage:0, world:0,
     table:[['common',30],['rare',50],['epic',18],['legendary',2]]},
-  {id:'epic',   name:'Huevo Épico', cost:15000, unlockStage:0,
+  {id:'epic',   name:'Huevo Épico', cost:15000, unlockStage:0, world:0,
     table:[['rare',35],['epic',45],['legendary',18],['mythic',2]]},
-  {id:'mythic', name:'Huevo Mítico', cost:70000, unlockStage:0,
+  {id:'mythic', name:'Huevo Mítico', cost:70000, unlockStage:0, world:0,
     table:[['epic',30],['legendary',45],['mythic',25]]},
-  {id:'candy',  name:'Huevo de Caramelo', cost:200000, unlockStage:1,
+  {id:'candy',  name:'Huevo de Caramelo', cost:200000, unlockStage:1, world:1,
     table:[['rare',20],['epic',40],['legendary',30],['mythic',10]]},
-  {id:'volcano',name:'Huevo Ígneo', cost:450000, unlockStage:2,
+  {id:'volcano',name:'Huevo Ígneo', cost:450000, unlockStage:2, world:2,
     table:[['rare',15],['epic',35],['legendary',35],['mythic',15]]},
-  {id:'void',   name:'Huevo del Abismo', cost:1000000, unlockStage:3,
+  {id:'void',   name:'Huevo del Abismo', cost:1000000, unlockStage:3, world:3,
     table:[['epic',10],['legendary',35],['mythic',55]]},
-  {id:'frozen', name:'Huevo Congelado', cost:2500000, unlockStage:4,
+  {id:'frozen', name:'Huevo Congelado', cost:2500000, unlockStage:4, world:4,
     table:[['legendary',25],['mythic',75]]},
 ];
+// Probabilidad de mascota SECRETA: independiente de la tabla de rareza de arriba,
+// se tira aparte en cada huevo (de cualquier tipo) y, si sale, ignora la tabla normal
+// y da la mascota secreta del mundo de ese huevo en su lugar.
+const SECRET_PET_CHANCE = 0.0001; // 0.01%
 const MAX_EQUIPPED_PETS = 3;
 
 // --- Tienda de Renacimiento: se paga con Tokens de Renacimiento (no con monedas) ---
@@ -392,9 +448,24 @@ function makePetInstance(template){
   return {
     uid: 'p'+Date.now().toString(36)+Math.floor(Math.random()*1000),
     id: template.id, name: template.name, rarity: template.rarity,
+    world: template.world, color: template.color, secret: !!template.secret,
     coinMult: template.coinMult, dpsMult: template.dpsMult, luck: template.luck, cap: template.cap,
     level: 1, xp: 0, golden,
   };
+}
+function rollSecretHit(){ return Math.random() < SECRET_PET_CHANCE; }
+// Elige la plantilla a partir de la cual crear una mascota nueva de este huevo: con
+// probabilidad SECRET_PET_CHANCE devuelve la secreta del mundo del huevo (ignorando
+// la tabla de rareza normal); si no, hace la tirada de rareza de siempre.
+function pickPetTemplate(egg, worldOverride){
+  const world = (worldOverride!=null) ? worldOverride : egg.world;
+  if(rollSecretHit()){
+    const secretPet = PETS.find(p=>p.world===world && p.secret);
+    if(secretPet) return secretPet;
+  }
+  const rarity = weightedPick(egg.table);
+  const candidates = PETS.filter(p=>p.rarity===rarity && p.world===world && !p.secret);
+  return candidates[Math.floor(Math.random()*candidates.length)];
 }
 
 /* ---------- logros (permanentes, de por vida — no se resetean con renacer) ---------- */
@@ -495,6 +566,20 @@ function effectiveCapacity(){
 }
 function effectiveDps(){
   return PICKAXES[state.pickaxeTier].dps * petBonuses().dpsMult * (state.rebirthPickaxe ? 1.2 : 1);
+}
+
+// Que la dureza se SIENTA: un mineral justo en el límite de lo que tu pico actual
+// puede picar (gap=0) se mina a la mitad de velocidad; uno muy por debajo de tu
+// capacidad (ya "viejo" para vos) se mina hasta 50% más rápido. Así, apenas entrás a
+// un mundo nuevo con el pico justo, se nota que cuesta más — y a medida que subís de
+// pico, los minerales de antes se sienten cada vez más rápidos de picar.
+const MINING_EFFICIENCY_MIN = 0.5;
+const MINING_EFFICIENCY_MAX = 1.5;
+const MINING_EFFICIENCY_STEP = 0.15; // cuánto sube la eficiencia por cada punto de dureza de "sobra"
+function miningEfficiency(oreHardness){
+  const gap = PICKAXES[state.pickaxeTier].maxHardness - oreHardness;
+  const eff = MINING_EFFICIENCY_MIN + gap*MINING_EFFICIENCY_STEP;
+  return Math.max(MINING_EFFICIENCY_MIN, Math.min(MINING_EFFICIENCY_MAX, eff));
 }
 
 /* ---------- misiones diarias ---------- */
@@ -808,6 +893,7 @@ function applyStageTheme(stageIdx){
   hemiLight.groundColor.setHex(stg.hemiGround);
   hemiLight.intensity = stg.hemiIntensity;
   regenerateField();
+  buildThemedDecor(stageIdx);
 }
 
 // safety floor far below the bedrock layer, so the player can never fall through
@@ -849,28 +935,52 @@ function makeTextSprite(text, color){
 }
 
 const sellCoinProps = [];
+// Puesto de tienda de verdad (paredes + mostrador + techo a dos aguas) en vez de una
+// simple carpa de 4 postes — usado por las 5 estaciones (Venta/Tienda/Portal/Huevos/Renacer).
 function addCanopy(pos, color){
-  const poleMat = new THREE.MeshStandardMaterial({color:0x2a2018, roughness:0.85});
-  const poleGeo = new THREE.CylinderGeometry(0.06,0.08,2.3,6);
+  const wallMat = new THREE.MeshStandardMaterial({color:0x3a2d20, roughness:0.85});
+  const beamMat = new THREE.MeshStandardMaterial({color:0x2a2018, roughness:0.85});
+  const roofMat = new THREE.MeshStandardMaterial({color, roughness:0.5, metalness:0.15, emissive:color, emissiveIntensity:0.12});
+  const trimMat = new THREE.MeshStandardMaterial({color, emissive:color, emissiveIntensity:0.6});
+  const counterMat = new THREE.MeshStandardMaterial({color:0x5a3f26, roughness:0.8});
+
+  const g = new THREE.Group();
+
+  // pared de fondo + laterales (el frente queda abierto, como un puesto de mercado)
+  const backWall = new THREE.Mesh(new THREE.BoxGeometry(3.6,1.9,0.15), wallMat);
+  backWall.position.set(0, 1.6, -1.75);
+  g.add(backWall);
+  const sideGeo = new THREE.BoxGeometry(0.15,1.9,3.6);
+  const wallL = new THREE.Mesh(sideGeo, wallMat); wallL.position.set(-1.8, 1.6, 0); g.add(wallL);
+  const wallR = new THREE.Mesh(sideGeo, wallMat); wallR.position.set(1.8, 1.6, 0); g.add(wallR);
+
+  // mostrador de madera al frente, con remate de color
+  const counter = new THREE.Mesh(new THREE.BoxGeometry(3.4,0.85,0.5), counterMat);
+  counter.position.set(0, 1.07, 1.6);
+  g.add(counter);
+  const counterTop = new THREE.Mesh(new THREE.BoxGeometry(3.6,0.08,0.65), trimMat);
+  counterTop.position.set(0, 1.5, 1.6);
+  g.add(counterTop);
+
+  // vigas de soporte en las 4 esquinas del techo
+  const beamGeo = new THREE.CylinderGeometry(0.08,0.1,2.3,6);
   [[-1.9,-1.9],[1.9,-1.9],[-1.9,1.9],[1.9,1.9]].forEach(([dx,dz])=>{
-    const pole = new THREE.Mesh(poleGeo, poleMat);
-    pole.position.set(pos.x+dx, 1.55, pos.z+dz);
-    scene.add(pole);
+    const beam = new THREE.Mesh(beamGeo, beamMat);
+    beam.position.set(dx,1.55,dz);
+    g.add(beam);
   });
-  const roof = new THREE.Mesh(
-    new THREE.ConeGeometry(3.15, 0.95, 4),
-    new THREE.MeshStandardMaterial({color, roughness:0.55, metalness:0.15, emissive:color, emissiveIntensity:0.12})
-  );
-  roof.rotation.y = Math.PI/4;
-  roof.position.set(pos.x, 3.05, pos.z);
-  scene.add(roof);
-  const roofTrim = new THREE.Mesh(
-    new THREE.TorusGeometry(3.05,0.045,6,4),
-    new THREE.MeshStandardMaterial({color, emissive:color, emissiveIntensity:0.6})
-  );
-  roofTrim.rotation.x = Math.PI/2; roofTrim.rotation.z = Math.PI/4;
-  roofTrim.position.set(pos.x, 2.62, pos.z);
-  scene.add(roofTrim);
+
+  // techo a dos aguas (en vez de la carpa piramidal simple de antes)
+  const roofSlope = new THREE.BoxGeometry(3.0, 0.1, 2.65);
+  const roofL = new THREE.Mesh(roofSlope, roofMat);
+  roofL.position.set(-0.85,3.05,0); roofL.rotation.z = Math.PI/5.2; g.add(roofL);
+  const roofR = new THREE.Mesh(roofSlope, roofMat);
+  roofR.position.set(0.85,3.05,0); roofR.rotation.z = -Math.PI/5.2; g.add(roofR);
+  const ridge = new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,2.75,8), trimMat);
+  ridge.rotation.z = Math.PI/2; ridge.position.set(0,3.62,0); g.add(ridge);
+
+  g.position.set(pos.x, 0, pos.z);
+  scene.add(g);
 }
 
 function buildStation(pos, color, shapeGeo, label){
@@ -1030,6 +1140,125 @@ function makeFencePost(x,z, withLantern){
     scene.add(b);
   }
 })();
+
+// helper reutilizable: encuentra una posición en la superficie que no pise el pozo de
+// la mina ni las 5 estaciones (misma lógica que ya usaban las rocas de arriba)
+function findScatterSpot(){
+  let x,z, tries=0;
+  do {
+    x = rand(-GROUND_R+1, GROUND_R-1);
+    z = rand(-GROUND_R+1, GROUND_R-1);
+    tries++;
+  } while((Math.abs(x)<FIELD_R+1.5 && Math.abs(z)<FIELD_R+1.5 ||
+           Math.hypot(x-SELL_POS.x,z-SELL_POS.z)<3.5 ||
+           Math.hypot(x-SHOP_POS.x,z-SHOP_POS.z)<3.5 ||
+           Math.hypot(x-PORTAL_POS.x,z-PORTAL_POS.z)<3.5 ||
+           Math.hypot(x-EGG_POS.x,z-EGG_POS.z)<3.5 ||
+           Math.hypot(x-REBIRTH_POS.x,z-REBIRTH_POS.z)<3.5 ||
+           (Math.abs(x)<2 && z>4 && z<10)) && tries<30);
+  return {x,z};
+}
+
+/* ---------- decoración temática por mundo: se reconstruye al viajar entre etapas ---------- */
+const themedDecorGroup = new THREE.Group();
+scene.add(themedDecorGroup);
+function clearThemedDecor(){
+  while(themedDecorGroup.children.length){
+    themedDecorGroup.remove(themedDecorGroup.children[0]);
+  }
+}
+
+function decorBase(x,z){
+  // Mina Inicial: nada extra — ya tiene rocas/cajones/carrito "genéricos" de siempre.
+}
+function decorCandy(x,z){
+  // bastón de caramelo: cilindro rayado + gancho, y gomitas alrededor
+  const g = new THREE.Group();
+  const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,1.8,10),
+    new THREE.MeshStandardMaterial({color:0xffffff, roughness:0.35}));
+  stick.position.y = 0.9;
+  g.add(stick);
+  for(let i=0;i<5;i++){
+    const stripe = new THREE.Mesh(new THREE.TorusGeometry(0.14,0.045,6,10),
+      new THREE.MeshStandardMaterial({color:0xff3d6a, roughness:0.4}));
+    stripe.position.y = 0.3 + i*0.32;
+    stripe.rotation.x = Math.PI/2.3;
+    g.add(stripe);
+  }
+  const hook = new THREE.Mesh(new THREE.TorusGeometry(0.28,0.12,8,12,Math.PI),
+    new THREE.MeshStandardMaterial({color:0xffffff, roughness:0.35}));
+  hook.position.y = 1.78; hook.rotation.z = Math.PI;
+  g.add(hook);
+  [0xff6fd8,0x6fe7ff,0xffe066].forEach((c,i)=>{
+    const gum = new THREE.Mesh(new THREE.SphereGeometry(0.22,8,8),
+      new THREE.MeshStandardMaterial({color:c, roughness:0.4, emissive:c, emissiveIntensity:0.25}));
+    gum.position.set(Math.cos(i*2.1)*0.55, 0.22, Math.sin(i*2.1)*0.55);
+    g.add(gum);
+  });
+  g.position.set(x,0,z);
+  themedDecorGroup.add(g);
+}
+function decorVolcano(x,z){
+  // espiga de obsidiana + charco de "lava" (disco emisivo) al pie
+  const g = new THREE.Group();
+  const spike = new THREE.Mesh(new THREE.ConeGeometry(0.45,2.1,7),
+    new THREE.MeshStandardMaterial({color:0x1c1410, roughness:0.4, metalness:0.4}));
+  spike.position.y = 1.05;
+  g.add(spike);
+  const spike2 = new THREE.Mesh(new THREE.ConeGeometry(0.28,1.3,6),
+    new THREE.MeshStandardMaterial({color:0x2a1e18, roughness:0.4, metalness:0.3}));
+  spike2.position.set(0.5,0.65,0.3);
+  g.add(spike2);
+  const pool = new THREE.Mesh(new THREE.CircleGeometry(0.9,16),
+    new THREE.MeshStandardMaterial({color:0xff5d3d, emissive:0xff5d3d, emissiveIntensity:0.8, roughness:0.6}));
+  pool.rotation.x = -Math.PI/2; pool.position.y = 0.03;
+  g.add(pool);
+  g.position.set(x,0,z);
+  themedDecorGroup.add(g);
+}
+function decorAbyss(x,z){
+  // racimo de cristales flotantes brillando en violeta/cian
+  const g = new THREE.Group();
+  const colors = [0x9a7fff,0x4fd8ff,0xc8a0ff];
+  for(let i=0;i<4;i++){
+    const c = colors[i%colors.length];
+    const cr = new THREE.Mesh(new THREE.OctahedronGeometry(0.3+Math.random()*0.25,0),
+      new THREE.MeshStandardMaterial({color:c, emissive:c, emissiveIntensity:0.7, roughness:0.25, metalness:0.3}));
+    cr.position.set((Math.random()-0.5)*0.9, 0.6+Math.random()*0.9, (Math.random()-0.5)*0.9);
+    cr.rotation.set(Math.random()*6,Math.random()*6,Math.random()*6);
+    cr.userData.floatSeed = Math.random()*10;
+    cr.userData.baseY = cr.position.y;
+    g.add(cr);
+  }
+  g.position.set(x,0,z);
+  themedDecorGroup.add(g);
+}
+function decorFrozen(x,z){
+  // pico de hielo + roca nevada
+  const g = new THREE.Group();
+  const spike = new THREE.Mesh(new THREE.ConeGeometry(0.4,1.8,6),
+    new THREE.MeshStandardMaterial({color:0xaeeaff, roughness:0.15, metalness:0.1, emissive:0x6fd8ff, emissiveIntensity:0.15, transparent:true, opacity:0.88}));
+  spike.position.y = 0.9;
+  g.add(spike);
+  const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5,0),
+    new THREE.MeshStandardMaterial({color:0xe8f4fb, roughness:0.9, flatShading:true}));
+  rock.position.set(0.55,0.3,0.35);
+  g.add(rock);
+  g.position.set(x,0,z);
+  themedDecorGroup.add(g);
+}
+const THEMED_DECOR_BUILDERS = [decorBase, decorCandy, decorVolcano, decorAbyss, decorFrozen];
+function buildThemedDecor(stageIdx){
+  clearThemedDecor();
+  const builder = THEMED_DECOR_BUILDERS[stageIdx] || decorBase;
+  if(builder === decorBase) return; // la Mina Inicial ya tiene su propia decoración de siempre
+  const count = 12;
+  for(let i=0;i<count;i++){
+    const spot = findScatterSpot();
+    builder(spot.x, spot.z);
+  }
+}
+buildThemedDecor(0);
 
 /* ---------- decoration: mine cart near spawn ---------- */
 (function buildCart(){
@@ -1328,7 +1557,7 @@ function mine(hit, dt){
     if(now - lastLockToast > 1500){ toast('🔒 Necesitás un pico mejor para picar '+info.name, '#ff5d5d'); lastLockToast = now; }
     return;
   }
-  entry.health -= effectiveDps() * dt;
+  entry.health -= effectiveDps() * miningEfficiency(info.hardness) * dt;
   if(entry.health <= 0){
     breakBlock(hit.key);
   }
@@ -1513,10 +1742,12 @@ function updateTargetPanel(hit){
         targetHealthInner.style.background = 'var(--red)';
       } else {
         const frac = Math.max(entry.health,0) / info.health;
-        targetName.textContent = info.name;
+        const eff = miningEfficiency(info.hardness);
+        const effTag = eff <= 0.6 ? ' 🐌' : (eff >= 1.3 ? ' ⚡' : '');
+        targetName.textContent = info.name + effTag;
         targetName.style.color = 'var(--text)';
         targetHealthInner.style.width = (frac*100) + '%';
-        targetHealthInner.style.background = 'var(--amber)';
+        targetHealthInner.style.background = eff <= 0.6 ? 'var(--red)' : (eff >= 1.3 ? 'var(--emerald)' : 'var(--amber)');
       }
       targetInfo.classList.add('show');
       return;
@@ -1779,9 +2010,7 @@ function hatchTokenEgg(egg){
   if(hatchAnimating) return;
   if(state.tokens < egg.cost){ toast('No tenés suficientes tokens', '#ff5d5d'); return; }
   state.tokens -= egg.cost;
-  const rarity = weightedPick(egg.table);
-  const candidates = PETS.filter(p=>p.rarity===rarity);
-  const template = candidates[Math.floor(Math.random()*candidates.length)];
+  const template = pickPetTemplate(egg, state.stage); // los huevos de token dan mascotas del mundo en el que estás parado
   const inst = makePetInstance(template);
   state.pets.push(inst);
   questProgress('hatch', 1);
@@ -1790,7 +2019,7 @@ function hatchTokenEgg(egg){
   markDirty();
   updateHUD();
   renderRebirthShop();
-  playHatchAnimation(template, rarity, inst.golden);
+  playHatchAnimation(template, inst.golden);
 }
 
 function hatchTokenEggX10(egg){
@@ -1798,7 +2027,7 @@ function hatchTokenEggX10(egg){
   const totalCost = egg.cost * 10;
   if(state.tokens < totalCost){ toast('No tenés suficientes tokens para 10', '#ff5d5d'); return; }
   state.tokens -= totalCost;
-  hatchBatch(egg, 10);
+  hatchBatch(egg, 10, state.stage);
 }
 
 function tokensForRebirth(){ return 1 + state.stage; } // llegar más lejos en el mapa da más tokens
@@ -1959,9 +2188,7 @@ function hatchEgg(egg){
   if(!stageUnlocked(egg.unlockStage)){ toast('Necesitás explorar '+STAGES[egg.unlockStage].name, '#ffb14e'); return; }
   if(state.coins < egg.cost){ toast('No tienes suficientes monedas', '#ff5d5d'); return; }
   state.coins -= egg.cost;
-  const rarity = weightedPick(egg.table);
-  const candidates = PETS.filter(p=>p.rarity===rarity);
-  const template = candidates[Math.floor(Math.random()*candidates.length)];
+  const template = pickPetTemplate(egg);
   const inst = makePetInstance(template);
   state.pets.push(inst);
   questProgress('hatch', 1);
@@ -1969,11 +2196,11 @@ function hatchEgg(egg){
   checkAchievements();
   markDirty();
   updateHUD();
-  playHatchAnimation(template, rarity, inst.golden);
+  playHatchAnimation(template, inst.golden);
 }
 
-// Abrir x10 de una: salteamos la animación larga (10x sería insoportable) y mostramos
-// un resumen agrupado por rareza, marcando cuántas salieron Doradas.
+// Abrir x10 de una: se ven las 10 mascotas apareciendo en pantalla (2 filas de 5),
+// cada huevo con su propio golpe de eclosión escalonado, en vez de saltear la animación.
 function hatchEggX10(egg){
   if(hatchAnimating) return;
   if(!stageUnlocked(egg.unlockStage)){ toast('Necesitás explorar '+STAGES[egg.unlockStage].name, '#ffb14e'); return; }
@@ -1983,29 +2210,20 @@ function hatchEggX10(egg){
   hatchBatch(egg, 10);
 }
 
-function hatchBatch(egg, n){
-  const counts = {};
-  let goldenCount = 0;
+function hatchBatch(egg, n, worldOverride){
+  const results = [];
   for(let i=0;i<n;i++){
-    const rarity = weightedPick(egg.table);
-    const candidates = PETS.filter(p=>p.rarity===rarity);
-    const template = candidates[Math.floor(Math.random()*candidates.length)];
+    const template = pickPetTemplate(egg, worldOverride);
     const inst = makePetInstance(template);
     state.pets.push(inst);
-    counts[rarity] = (counts[rarity]||0) + 1;
-    if(inst.golden) goldenCount++;
+    results.push({template, golden:inst.golden});
   }
   questProgress('hatch', n);
   state.stats.eggsHatched += n;
   checkAchievements();
   markDirty();
   updateHUD();
-  renderEggs();
-  renderRebirthShop();
-  renderPets();
-  const order = ['mythic','legendary','epic','rare','common'];
-  const parts = order.filter(r=>counts[r]).map(r=> counts[r]+' '+PET_RARITIES[r].name);
-  toast('🎉 x'+n+': '+parts.join(', ')+(goldenCount>0 ? ' · ✨'+goldenCount+' Dorada'+(goldenCount>1?'s':'') : ''), '#ffd23f');
+  playHatchBatchAnimation(results);
 }
 
 const hatchReveal = document.getElementById('hatchReveal');
@@ -2037,10 +2255,10 @@ function ensureHatchPetRenderer(){
   rim.position.set(-1.5, 0.6, -1.5);
   hatchPetScene.add(rim);
 }
-function showHatchPetModel(template, rarity, golden){
+function showHatchPetModel(template, golden){
   ensureHatchPetRenderer();
   if(hatchPetMesh) hatchPetScene.remove(hatchPetMesh);
-  hatchPetMesh = buildPetFollowerMesh(template.id, rarity, golden);
+  hatchPetMesh = buildPetFollowerMesh(template.id, template.color, template.rarity, golden, template.secret);
   hatchPetMesh.position.set(0, -0.05, 0);
   hatchPetScene.add(hatchPetMesh);
   if(hatchPetRAF) cancelAnimationFrame(hatchPetRAF);
@@ -2058,19 +2276,20 @@ function hideHatchPetModel(){
   if(hatchPetRAF){ cancelAnimationFrame(hatchPetRAF); hatchPetRAF = null; }
 }
 
-function playHatchAnimation(template, rarity, golden){
+function playHatchAnimation(template, golden){
   hatchAnimating = true;
   renderEggs(); // refresca para deshabilitar los botones mientras se reproduce
 
-  const info = PET_RARITIES[rarity];
-  const color = golden ? 0xffe066 : info.color;
+  const info = PET_RARITIES[template.rarity];
+  const secret = !!template.secret;
+  const color = golden ? 0xffe066 : (secret ? 0xffffff : info.color);
   hatchEggEmoji.className = 'hatch-egg';
   hatchEggEmoji.textContent = '🥚';
   hatchGlow.className = 'hatch-glow';
   hatchGlow.style.background = 'radial-gradient(circle, '+hexStr(color)+' 0%, transparent 72%)';
   hatchPetCanvas.className = 'hatch-pet-canvas';
   hatchResult.className = 'hatch-result';
-  hatchRarity.textContent = golden ? '✨ '+info.name+' DORADA ✨' : info.name;
+  hatchRarity.textContent = secret ? '🌟 SECRETA 🌟' : (golden ? '✨ '+info.name+' DORADA ✨' : info.name);
   hatchRarity.style.color = hexStr(color);
   hatchName.textContent = template.name;
   hatchReveal.classList.remove('hidden');
@@ -2080,10 +2299,10 @@ function playHatchAnimation(template, rarity, golden){
     hatchGlow.classList.add('show');
   }, 850);
   setTimeout(()=>{
-    showHatchPetModel(template, rarity, golden);
+    showHatchPetModel(template, golden);
     hatchPetCanvas.classList.add('show');
     hatchResult.classList.add('show');
-    toast((golden?'✨ ¡DORADA! ':'¡')+'Obtuviste a '+template.name+'! ('+info.name+')', hexStr(color));
+    toast((secret?'🌟 ¡SECRETA! ':(golden?'✨ ¡DORADA! ':'¡'))+'Obtuviste a '+template.name+'!'+(secret?'':' ('+info.name+')'), hexStr(color));
   }, 1150);
   setTimeout(()=>{
     hatchReveal.classList.add('hidden');
@@ -2092,6 +2311,56 @@ function playHatchAnimation(template, rarity, golden){
     renderEggs();
     renderPets();
   }, 3000);
+}
+
+// x10: se ven los 10 huevos aparecer distribuidos en 2 filas de 5, cada uno haciendo
+// su propio golpe de eclosión con un pequeño escalonado, y revelando el ícono de la
+// mascota (con color de rareza/Dorada/Secreta) apenas le toca el turno.
+const hatchBatchReveal = document.getElementById('hatchBatchReveal');
+const hatchBatchGrid = document.getElementById('hatchBatchGrid');
+function playHatchBatchAnimation(results){
+  hatchAnimating = true;
+  renderEggs();
+  hatchBatchGrid.innerHTML = '';
+  const cells = results.map(()=>{
+    const cell = document.createElement('div');
+    cell.className = 'batchCell';
+    cell.innerHTML = '<span class="batchEmoji">🥚</span>';
+    hatchBatchGrid.appendChild(cell);
+    return cell;
+  });
+  hatchBatchReveal.classList.remove('hidden');
+  const STEP = 220;
+  results.forEach((r, i)=>{
+    setTimeout(()=>{
+      const cell = cells[i];
+      const t = r.template;
+      const secret = !!t.secret;
+      cell.className = 'batchCell cracked rarity-'+t.rarity + (r.golden?' golden':'') + (secret?' secret':'');
+      cell.innerHTML = '<span class="batchEmoji">'+(PET_ICONS[t.id]||'❓')+'</span>'+
+        '<span class="batchLabel">'+(secret?'🌟 SECRETA':(r.golden?'✨ '+t.name:t.name))+'</span>';
+    }, STEP*i);
+  });
+  const totalTime = STEP*results.length + 900;
+  setTimeout(()=>{
+    hatchBatchReveal.classList.add('hidden');
+    hatchAnimating = false;
+    renderEggs();
+    renderRebirthShop();
+    renderPets();
+    const counts = {};
+    let goldenCount=0, secretCount=0;
+    results.forEach(r=>{
+      counts[r.template.rarity] = (counts[r.template.rarity]||0) + 1;
+      if(r.golden) goldenCount++;
+      if(r.template.secret) secretCount++;
+    });
+    const order = ['mythic','legendary','epic','rare','common'];
+    const parts = order.filter(x=>counts[x]).map(x=> counts[x]+' '+PET_RARITIES[x].name);
+    toast('🎉 x'+results.length+': '+parts.join(', ')
+      +(goldenCount>0 ? ' · ✨'+goldenCount+' Dorada'+(goldenCount>1?'s':'') : '')
+      +(secretCount>0 ? ' · 🌟'+secretCount+' SECRETA'+(secretCount>1?'S':'') : ''), '#ffd23f');
+  }, totalTime);
 }
 
 function togglePetEquip(uid){
@@ -2172,7 +2441,7 @@ function renderPets(){
     return;
   }
   const order = {mythic:0, legendary:1, epic:2, rare:3, common:4};
-  const sorted = [...state.pets].sort((a,b)=> order[a.rarity]-order[b.rarity]);
+  const sorted = [...state.pets].sort((a,b)=> (b.secret-a.secret) || (order[a.rarity]-order[b.rarity]));
   sorted.forEach(p=>{
     const equipped = state.equippedPets.includes(p.uid);
     const rarityInfo = PET_RARITIES[p.rarity];
@@ -2180,18 +2449,20 @@ function renderPets(){
     const m = petLevelMult(level) * (p.golden ? 1.5 : 1);
     const maxed = level >= PET_MAX_LEVEL;
     const xpPct = maxed ? 100 : Math.round(100*(p.xp||0)/xpForPetLevel(level));
+    const worldName = STAGES[p.world] ? STAGES[p.world].name : '';
     const bonusLine = '+'+Math.round(p.coinMult*m*100)+'% $'
       + (p.dpsMult>0 ? ', +'+Math.round(p.dpsMult*m*100)+'% pico' : '')
       + (p.luck>0 ? ', +'+Math.round(p.luck*m*100)+'% suerte' : '')
       + (p.cap>0 ? ', +'+Math.round(p.cap*m)+' mochila' : '');
     const card = document.createElement('div');
-    card.className = 'pet-card rarity-'+p.rarity + (equipped?' equipped':'') + (p.golden?' golden':'');
-    card.title = bonusLine;
+    card.className = 'pet-card rarity-'+p.rarity + (equipped?' equipped':'') + (p.golden?' golden':'') + (p.secret?' secret':'');
+    card.title = bonusLine+' — '+worldName;
     card.innerHTML =
       (equipped ? '<span class="pet-equipped-badge">✅</span>' : '') +
       '<div class="pet-icon">'+(PET_ICONS[p.id]||'❓')+'</div>' +
-      '<div class="pet-name">'+(p.golden?'✨ ':'')+p.name+'</div>' +
-      '<div class="pet-rarity-label" style="color:'+hexStr(rarityInfo.color)+'">'+rarityInfo.name+(p.golden?' Dorada':'')+'</div>' +
+      '<div class="pet-name">'+(p.secret?'🌟 ':(p.golden?'✨ ':''))+p.name+'</div>' +
+      '<div class="pet-rarity-label" style="color:'+(p.secret?'#ffffff':hexStr(rarityInfo.color))+'">'+(p.secret?'SECRETA':(rarityInfo.name+(p.golden?' Dorada':'')))+'</div>' +
+      '<div class="pet-world-label">'+worldName+'</div>' +
       '<div class="pet-xp-wrap"><div class="pet-xp-inner" style="width:'+xpPct+'%"></div></div>' +
       '<div class="pet-lvl">Nv.'+level+'</div>';
     card.onclick = ()=> togglePetEquip(p.uid);
@@ -2604,18 +2875,18 @@ const PET_MODEL_BUILDERS = {
   },
 };
 
-function buildPetFollowerMesh(id, rarity, golden){
-  const info = PET_RARITIES[rarity] || PET_RARITIES.common;
-  const glow = (rarity==='mythic'||rarity==='legendary') || golden;
-  const color = golden ? 0xffe066 : info.color;
+function buildPetFollowerMesh(id, color, rarity, golden, secret){
+  const glow = golden || secret || rarity==='mythic' || rarity==='legendary';
+  const finalColor = golden ? 0xffe066 : (secret ? 0xffffff : color);
   const mat = new THREE.MeshStandardMaterial({
-    color, roughness:0.35, metalness:golden?0.7:0.2,
-    emissive:color, emissiveIntensity: golden ? 0.85 : (glow ? 0.55 : 0.32),
+    color: finalColor, roughness:0.35, metalness:(golden||secret)?0.7:0.2,
+    emissive: finalColor, emissiveIntensity: secret ? 1.0 : (golden ? 0.85 : (glow?0.55:0.32)),
   });
   mat.userData.glowEyes = glow;
   const builder = PET_MODEL_BUILDERS[id] || PET_MODEL_BUILDERS.mole;
   const group = builder(mat);
-  group.scale.setScalar((PET_RARITY_SCALE[rarity] || 1) * (golden?1.12:1));
+  const scaleBump = secret ? 1.18 : (golden ? 1.12 : 1);
+  group.scale.setScalar((PET_RARITY_SCALE[rarity] || 1) * scaleBump);
   return group;
 }
 
@@ -2630,12 +2901,12 @@ function petFollowerOffset(index, count, yaw){
 }
 
 // arma (o reconstruye) las criaturas que siguen a un jugador. `pets` es un
-// arreglo de {id, rarity} — se usa tanto para uno mismo como para avatares ajenos
+// arreglo de {id, color, rarity, golden, secret} — se usa tanto para uno mismo como para avatares ajenos
 function rebuildPetFollowers(followerArr, parentScene, pets){
   followerArr.forEach(f=> parentScene.remove(f.mesh));
   followerArr.length = 0;
   (pets||[]).slice(0,3).forEach((p, i)=>{
-    const mesh = buildPetFollowerMesh(p.id, p.rarity, p.golden);
+    const mesh = buildPetFollowerMesh(p.id, p.color, p.rarity, p.golden, p.secret);
     parentScene.add(mesh);
     followerArr.push({mesh, seed:Math.random()*10});
   });
@@ -2673,7 +2944,7 @@ function upsertOtherPlayer(id, data){
   av.target.set(data.x, data.y, data.z);
   av.yaw = data.yaw || 0;
   av.group.visible = (data.stage === state.stage);
-  const rarKey = (data.pets||[]).map(p=>p.id+':'+p.rarity+':'+(p.golden?'g':'n')).join(',');
+  const rarKey = (data.pets||[]).map(p=>p.id+':'+p.color+':'+p.rarity+':'+(p.golden?'g':'n')+(p.secret?'s':'')).join(',');
   if(rarKey !== av.petRarities){
     av.petRarities = rarKey;
     rebuildPetFollowers(av.pets, scene, data.pets);
@@ -2870,7 +3141,7 @@ function netBroadcast(){
     blocksMined: state.stats.blocksMined, eggsHatched: state.stats.eggsHatched,
     pets: state.equippedPets.map(uid=>{
       const p = state.pets.find(pp=>pp.uid===uid);
-      return p ? {id:p.id, rarity:p.rarity, golden:!!p.golden} : null;
+      return p ? {id:p.id, color:p.color, rarity:p.rarity, golden:!!p.golden, secret:!!p.secret} : null;
     }).filter(Boolean),
   };
   if(Net.mode === 'firebase'){
@@ -2941,7 +3212,7 @@ const myPetFollowers = []; // criaturas que te siguen a vos, visibles si te das 
 function rebuildMyPetFollowers(){
   const pets = state.equippedPets.map(uid=>{
     const p = state.pets.find(pp=>pp.uid===uid);
-    return p ? {id:p.id, rarity:p.rarity, golden:!!p.golden} : null;
+    return p ? {id:p.id, color:p.color, rarity:p.rarity, golden:!!p.golden, secret:!!p.secret} : null;
   }).filter(Boolean);
   rebuildPetFollowers(myPetFollowers, scene, pets);
 }
@@ -3289,6 +3560,14 @@ function animate(now){
   updateTorchFlicker(t);
   updateDust(dt);
   updateAvatars(dt, now);
+  themedDecorGroup.children.forEach(g=>{
+    g.children.forEach(c=>{
+      if(c.userData.floatSeed!=null){
+        c.rotation.y += dt*0.4;
+        c.position.y = c.userData.baseY + Math.sin(t*1.3 + c.userData.floatSeed)*0.08;
+      }
+    });
+  });
 
   renderer.render(scene, camera);
 }

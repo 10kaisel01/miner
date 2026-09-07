@@ -236,6 +236,33 @@
   @keyframes hatchPop{ to{opacity:1;transform:scale(1) translateY(0);} }
   .hatch-result .rar{font-size:12px;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:6px;}
   .hatch-result .nm{font-size:30px;font-weight:800;color:var(--text);text-shadow:0 0 18px rgba(255,255,255,.25);}
+
+  /* x10: grilla de 2 filas de 5 huevos, cada uno se rompe en su turno */
+  #hatchBatchReveal{
+    position:absolute;inset:0;background:rgba(6,4,3,.92);z-index:6;
+    display:flex;align-items:center;justify-content:center;
+  }
+  #hatchBatchReveal.hidden{display:none;}
+  .batchGrid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;padding:20px;}
+  .batchCell{
+    width:84px;height:88px;border-radius:14px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:4px;position:relative;
+    background:linear-gradient(180deg,var(--panel-2),var(--panel));border:2px solid var(--border);
+    transition:transform .2s, border-color .2s, box-shadow .2s;
+  }
+  .batchCell.cracked{transform:scale(1.06);animation:batchPop .35s;}
+  @keyframes batchPop{0%{transform:scale(0.7) rotate(-8deg);} 60%{transform:scale(1.12) rotate(4deg);} 100%{transform:scale(1.06) rotate(0);}}
+  .batchCell .batchEmoji{font-size:32px;}
+  .batchCell .batchLabel{font-size:8.5px;font-weight:700;color:var(--text-dim);text-align:center;line-height:1.15;padding:0 3px;}
+  .batchCell.cracked.rarity-common{border-color:#9a958c;}
+  .batchCell.cracked.rarity-rare{border-color:#4f8bff;box-shadow:0 0 10px rgba(79,139,255,.4);}
+  .batchCell.cracked.rarity-epic{border-color:#9b6bff;box-shadow:0 0 10px rgba(155,107,255,.45);}
+  .batchCell.cracked.rarity-legendary{border-color:#ffb14e;box-shadow:0 0 12px rgba(255,177,78,.5);}
+  .batchCell.cracked.rarity-mythic{border-color:#ff5cf0;box-shadow:0 0 14px rgba(255,92,240,.55);}
+  .batchCell.cracked.golden{background:linear-gradient(180deg,rgba(255,224,102,.32),var(--panel));}
+  .batchCell.cracked.secret{border-color:#fff;box-shadow:0 0 20px rgba(255,255,255,.8);animation:batchPop .35s, secretPulse 1s infinite alternate;}
+  @keyframes secretPulse{from{box-shadow:0 0 10px rgba(255,255,255,.5);} to{box-shadow:0 0 24px rgba(255,255,255,.95);}}
+
   .modalHead{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:2px solid var(--border);gap:10px;position:sticky;top:0;background:linear-gradient(180deg,var(--panel-2),var(--panel));z-index:2;}
   .modalHead h2{margin:0;font-size:22px;color:var(--amber);}
   .modalHead .coins{font-family:'JetBrains Mono';color:var(--gold);font-weight:700;}
@@ -281,10 +308,12 @@
   .pet-card.rarity-mythic{border-color:#ff5cf0;box-shadow:0 0 14px rgba(255,92,240,.4);}
   .pet-card.equipped{outline:2px solid var(--gold);outline-offset:1px;}
   .pet-card.golden{background:linear-gradient(180deg,rgba(255,224,102,.22),rgba(0,0,0,.35));}
+  .pet-card.secret{border-color:#ffffff;box-shadow:0 0 16px rgba(255,255,255,.55);background:linear-gradient(180deg,rgba(255,255,255,.18),rgba(0,0,0,.4));}
   .pet-card .pet-equipped-badge{position:absolute;top:4px;left:5px;font-size:11px;}
   .pet-card .pet-icon{font-size:32px;line-height:1;margin:6px 0 3px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5));}
   .pet-card .pet-name{font-size:11px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .pet-card .pet-rarity-label{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;}
+  .pet-card .pet-rarity-label{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px;}
+  .pet-card .pet-world-label{font-size:8px;color:var(--text-dim);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
   .pet-card .pet-lvl{position:absolute;bottom:4px;right:7px;font-family:'JetBrains Mono';font-size:10px;color:var(--cyan);font-weight:700;}
 
   .rank-row{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:9px;background:rgba(0,0,0,.2);margin-bottom:6px;font-size:13px;}
